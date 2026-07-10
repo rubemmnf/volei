@@ -1,0 +1,59 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Team {
+  TEAM_A
+  TEAM_B
+}
+
+model Player {
+  id                String        @id @default(uuid())
+  name              String
+  medianSkillRating Float
+  eloRating         Int           @default(1200)
+  
+  // Relations
+  matchRosters      MatchRoster[]
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model Match {
+  id        String        @id @default(uuid())
+  timestamp DateTime      @default(now())
+  winner    Team?
+  
+  // Relations
+  rosters   MatchRoster[]
+
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model MatchRoster {
+  id        String   @id @default(uuid())
+  
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  
+  team      Team
+
+  createdAt DateTime @default(now())
+
+  // Ensure a player is only in a match once
+  @@unique([matchId, playerId])
+  
+  // Indexes for fast familiarity queries (self-joins on MatchRoster)
+  @@index([playerId])
+  @@index([matchId, team])
+}
