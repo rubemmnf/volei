@@ -34,32 +34,46 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
     );
   }
 
-  const activePlayers = state.players.filter((p) => p.active);
-  const canGenerate = activePlayers.length === 12;
+  const attending = state.players.filter((p) => p.active);
+  const canGenerate = attending.length === 12;
+
+  // Preview can outlive the roster it was built from (Settings import / Delete All
+  // Data replace state without unmounting this screen) — drop it if any id is gone.
+  const rosterIds = new Set(state.players.map((p) => p.id));
+  const validPreview =
+    preview && preview.every((team) => team.every((p) => rosterIds.has(p.id)))
+      ? preview
+      : null;
+
+  const handleToggleAttendance = (playerId: string, active: boolean) => {
+    dispatch({ type: "set-player-active", id: playerId, active });
+    setPreview(null);
+    setSelection(null);
+  };
 
   const handleGenerate = () => {
     const matrix = buildFamiliarityMatrix(state.sessions, new Date());
-    setPreview(generateTeams(activePlayers, matrix));
+    setPreview(generateTeams(attending, matrix));
     setSelection(null);
   };
 
   const handlePlayerTap = (team: number, playerId: string) => {
-    if (!preview) return;
+    if (!validPreview) return;
     if (!selection || selection.team === team) {
       setSelection({ team, playerId });
       return;
     }
-    setPreview(swapInPreview(preview, selection, { team, playerId }));
+    setPreview(swapInPreview(validPreview, selection, { team, playerId }));
     setSelection(null);
   };
 
   const handleStart = () => {
-    if (!preview) return;
+    if (!validPreview) return;
     dispatch({
       type: "start-session",
       id: crypto.randomUUID(),
       date: new Date().toISOString().slice(0, 10),
-      teams: preview.map((team) => team.map((p) => p.id)) as [string[], string[], string[]],
+      teams: validPreview.map((team) => team.map((p) => p.id)) as [string[], string[], string[]],
     });
     setPreview(null);
     onSessionStarted();
@@ -69,11 +83,42 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
     <div className="flex flex-col gap-4">
       <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Weekly Teams</h2>
 
-      {!canGenerate && (
-        <p className="text-zinc-500 text-sm">
-          Need exactly 12 active players to generate teams ({activePlayers.length} now).
-        </p>
-      )}
+      <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
+        <div className="flex justify-between items-baseline mb-3">
+          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+            Who's playing today?
+          </h3>
+          <span
+            className={`text-sm font-black ${canGenerate ? "text-emerald-400" : "text-amber-400"}`}
+          >
+            {attending.length}/12 selected
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[...state.players]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((player) => (
+              <button
+                key={player.id}
+                type="button"
+                aria-pressed={player.active}
+                onClick={() => handleToggleAttendance(player.id, !player.active)}
+                className={`px-3 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                  player.active
+                    ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
+                    : "bg-black border-zinc-800 text-zinc-600"
+                }`}
+              >
+                {player.name}
+              </button>
+            ))}
+        </div>
+        {!canGenerate && (
+          <p className="text-zinc-500 text-xs mt-3">
+            Select exactly 12 players to generate teams.
+          </p>
+        )}
+      </div>
 
       <button
         type="button"
@@ -81,16 +126,16 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
         disabled={!canGenerate}
         className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl disabled:opacity-30"
       >
-        {preview ? "Regenerate Teams" : "Generate Teams"}
+        {validPreview ? "Regenerate Teams" : "Generate Teams"}
       </button>
 
-      {preview && (
+      {validPreview && (
         <>
           <p className="text-zinc-500 text-xs text-center">
             Tap a player on two different teams to swap them manually.
           </p>
           <div className="flex flex-col gap-3">
-            {preview.map((team, i) => (
+            {validPreview.map((team, i) => (
               <div
                 key={TEAM_META[i].name}
                 data-testid={`preview-${TEAM_META[i].name}`}

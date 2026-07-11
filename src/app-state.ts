@@ -4,6 +4,7 @@ import { skillToElo } from "./algorithm/elo";
 export type AppAction =
   | { type: "add-player"; id: string; name: string; skill: number }
   | { type: "update-player"; id: string; name: string; skill: number }
+  | { type: "set-player-active"; id: string; active: boolean }
   | { type: "remove-player"; id: string }
   | { type: "start-session"; id: string; date: string; teams: [string[], string[], string[]] }
   | { type: "end-session" }
@@ -51,6 +52,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         }),
       };
     }
+
+    case "set-player-active":
+      return {
+        ...state,
+        players: state.players.map((p) =>
+          p.id === action.id ? { ...p, active: action.active } : p,
+        ),
+      };
 
     case "remove-player":
       return { ...state, players: state.players.filter((p) => p.id !== action.id) };

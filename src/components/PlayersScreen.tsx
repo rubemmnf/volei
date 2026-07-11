@@ -28,7 +28,9 @@ export function PlayersScreen({ state, dispatch }: Props) {
     <div className="flex flex-col gap-4">
       <div className="flex justify-between items-baseline">
         <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Roster</h2>
-        <span className="text-zinc-500 text-sm font-bold">{state.players.length}/12 players</span>
+        <span className="text-zinc-500 text-sm font-bold">
+          {state.players.length} in roster
+        </span>
       </div>
 
       <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 flex flex-col gap-3">

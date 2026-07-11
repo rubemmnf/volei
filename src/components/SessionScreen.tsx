@@ -33,6 +33,27 @@ export function SessionScreen({ state, dispatch }: Props) {
   const playerById = new Map(state.players.map((p) => [p.id, p]));
   const resolveTeam = (ids: string[]): Player[] => ids.map((id) => playerById.get(id)!);
 
+  // A restored backup can contain an unfinished session whose player ids no longer
+  // exist in the roster — recover instead of crashing on the lookups below.
+  const missingCount = session.teams.flat().filter((id) => !playerById.has(id)).length;
+  if (missingCount > 0) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <p className="text-zinc-400">
+          This session references missing players (likely from a restored backup). End it and
+          generate fresh teams.
+        </p>
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "end-session" })}
+          className="border border-red-500/40 text-red-400 font-bold px-6 py-3 rounded-xl"
+        >
+          End Session
+        </button>
+      </div>
+    );
+  }
+
   const toggleTeam = (index: number) => {
     setSwapMessage(null);
     setSelected((prev) =>

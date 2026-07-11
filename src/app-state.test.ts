@@ -62,6 +62,18 @@ describe("update-player", () => {
   });
 });
 
+describe("set-player-active", () => {
+  test("toggles attendance without touching elo or history", () => {
+    let state = addPlayer(initialState(), "p1", 7);
+    const eloBefore = state.players[0].elo;
+    state = appReducer(state, { type: "set-player-active", id: "p1", active: false });
+    expect(state.players[0].active).toBe(false);
+    expect(state.players[0].elo).toBe(eloBefore);
+    state = appReducer(state, { type: "set-player-active", id: "p1", active: true });
+    expect(state.players[0].active).toBe(true);
+  });
+});
+
 describe("remove-player", () => {
   test("removes the player", () => {
     let state = addPlayer(initialState(), "p1");
