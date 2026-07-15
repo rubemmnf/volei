@@ -1,12 +1,10 @@
-import type { Player } from "../types";
+import { MAX_SKILL, MIN_SKILL, type Player } from "../types";
 
-const MIN_SKILL = 1;
-const MAX_SKILL = 10;
 const MIN_ELO = 800;
 const MAX_ELO = 1600;
 const K_FACTOR = 32;
 
-/** Linear map from a 1-10 skill rating to the 800-1600 Elo range (clamped). */
+/** Linear map from a 1-5 skill rating to the 800-1600 Elo range (clamped). */
 export function skillToElo(skill: number): number {
   const clamped = Math.max(MIN_SKILL, Math.min(MAX_SKILL, skill));
   const fraction = (clamped - MIN_SKILL) / (MAX_SKILL - MIN_SKILL);

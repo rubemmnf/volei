@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { AppState } from "../types";
+import { MAX_SKILL, MIN_SKILL, type AppState } from "../types";
 import { isPlayerReferenced, type AppAction } from "../app-state";
 
-const SKILLS = Array.from({ length: 10 }, (_, i) => i + 1);
+const SKILLS = Array.from({ length: MAX_SKILL - MIN_SKILL + 1 }, (_, i) => MIN_SKILL + i);
+const DEFAULT_SKILL = 3;
 
 type Props = {
   state: AppState;
@@ -11,7 +12,7 @@ type Props = {
 
 export function PlayersScreen({ state, dispatch }: Props) {
   const [name, setName] = useState("");
-  const [skill, setSkill] = useState(5);
+  const [skill, setSkill] = useState(DEFAULT_SKILL);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const handleAdd = () => {
@@ -19,7 +20,7 @@ export function PlayersScreen({ state, dispatch }: Props) {
     if (!trimmed) return;
     dispatch({ type: "add-player", id: crypto.randomUUID(), name: trimmed, skill });
     setName("");
-    setSkill(5);
+    setSkill(DEFAULT_SKILL);
   };
 
   const sorted = [...state.players].sort((a, b) => a.name.localeCompare(b.name));

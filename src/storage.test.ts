@@ -5,7 +5,7 @@ import type { AppState } from "./types";
 
 const sampleState: AppState = {
   version: 1,
-  players: [{ id: "p1", name: "John", skill: 7, elo: 1200, active: true }],
+  players: [{ id: "p1", name: "John", skill: 4, elo: 1200, active: true }],
   sessions: [],
 };
 

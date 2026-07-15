@@ -11,17 +11,17 @@ describe("skillToElo", () => {
     expect(skillToElo(1)).toBe(800);
   });
 
-  test("maps skill 10 to 1600", () => {
-    expect(skillToElo(10)).toBe(1600);
+  test("maps skill 5 to 1600", () => {
+    expect(skillToElo(5)).toBe(1600);
   });
 
-  test("maps skill 5.5 to 1200", () => {
-    expect(skillToElo(5.5)).toBe(1200);
+  test("maps skill 3 to 1200", () => {
+    expect(skillToElo(3)).toBe(1200);
   });
 
   test("clamps out-of-range skill", () => {
     expect(skillToElo(0)).toBe(800);
-    expect(skillToElo(15)).toBe(1600);
+    expect(skillToElo(6)).toBe(1600);
   });
 });
 

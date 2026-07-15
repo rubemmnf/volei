@@ -1,9 +1,12 @@
 import { z } from "zod";
 
+export const MIN_SKILL = 1;
+export const MAX_SKILL = 5;
+
 export const PlayerSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
-  skill: z.number().int().min(1).max(10),
+  skill: z.number().int().min(MIN_SKILL).max(MAX_SKILL),
   elo: z.number(),
   active: z.boolean(),
 });

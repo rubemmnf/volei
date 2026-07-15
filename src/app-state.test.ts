@@ -39,7 +39,7 @@ const match: Match = {
 
 describe("add-player", () => {
   test("adds a player with elo seeded from skill", () => {
-    const state = addPlayer(initialState(), "p1", 10);
+    const state = addPlayer(initialState(), "p1", 5);
     expect(state.players).toHaveLength(1);
     expect(state.players[0].elo).toBe(1600);
     expect(state.players[0].active).toBe(true);
@@ -49,7 +49,7 @@ describe("add-player", () => {
 describe("update-player", () => {
   test("reseeds elo from new skill when player never played", () => {
     let state = addPlayer(initialState(), "p1", 5);
-    state = appReducer(state, { type: "update-player", id: "p1", name: "New", skill: 10 });
+    state = appReducer(state, { type: "update-player", id: "p1", name: "New", skill: 5 });
     expect(state.players[0].name).toBe("New");
     expect(state.players[0].elo).toBe(1600);
   });
@@ -57,14 +57,14 @@ describe("update-player", () => {
   test("keeps earned elo when player has session history", () => {
     let state = stateWithActiveSession();
     const before = state.players.find((p) => p.id === "p1")!.elo;
-    state = appReducer(state, { type: "update-player", id: "p1", name: "New", skill: 10 });
+    state = appReducer(state, { type: "update-player", id: "p1", name: "New", skill: 5 });
     expect(state.players.find((p) => p.id === "p1")!.elo).toBe(before);
   });
 });
 
 describe("set-player-active", () => {
   test("toggles attendance without touching elo or history", () => {
-    let state = addPlayer(initialState(), "p1", 7);
+    let state = addPlayer(initialState(), "p1", 4);
     const eloBefore = state.players[0].elo;
     state = appReducer(state, { type: "set-player-active", id: "p1", active: false });
     expect(state.players[0].active).toBe(false);

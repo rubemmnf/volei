@@ -4,7 +4,7 @@ import { AppStateSchema, MatchSchema, PlayerSchema, SessionSchema } from "./type
 const validPlayer = {
   id: "p1",
   name: "John",
-  skill: 7,
+  skill: 4,
   elo: 1200,
   active: true,
 };
@@ -39,8 +39,8 @@ describe("PlayerSchema", () => {
     expect(PlayerSchema.safeParse({ ...validPlayer, skill: 0 }).success).toBe(false);
   });
 
-  test("rejects skill above 10", () => {
-    expect(PlayerSchema.safeParse({ ...validPlayer, skill: 11 }).success).toBe(false);
+  test("rejects skill above 5", () => {
+    expect(PlayerSchema.safeParse({ ...validPlayer, skill: 6 }).success).toBe(false);
   });
 
   test("rejects empty name", () => {

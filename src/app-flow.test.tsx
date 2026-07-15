@@ -52,7 +52,7 @@ describe("players flow", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.type(screen.getByLabelText("Name"), "John");
-    await user.selectOptions(screen.getByLabelText("Skill"), "7");
+    await user.selectOptions(screen.getByLabelText("Skill"), "4");
     await user.click(screen.getByRole("button", { name: /add player/i }));
     expect(screen.getByText("John")).toBeInTheDocument();
     expect(screen.getByText(/1 in roster/)).toBeInTheDocument();

@@ -24,7 +24,7 @@ Vite + React + TypeScript static SPA. `vite-plugin-pwa` for offline + install. T
 ## Data model
 
 ```ts
-type Player  = { id: string; name: string; skill: number /* 1-10 */; elo: number; active: boolean }
+type Player  = { id: string; name: string; skill: number /* 1-5 */; elo: number; active: boolean }
 type Match   = { id: string; sideA: string[]; sideB: string[]; // 4 playerIds each — exact roster snapshot
                  scoreA: number; scoreB: number; timestamp: string }
 type Session = { id: string; date: string; teams: [string[], string[], string[]]; matches: Match[];
@@ -39,13 +39,13 @@ Matches snapshot exact rosters (not team indexes) so Elo and familiarity stay ex
 1. **generateTeams(players, history)** — enumerate all 5,775 partitions of 12 into 3×4.
    Cost = `eloVariance + FAMILIARITY_WEIGHT × familiarityPenalty`.
    Familiarity is recency-decayed: pair contribution = `0.75^weeksAgo` (all-time counts saturate; decay keeps variety pressure on recent weeks).
-   New players seed effective Elo from skill: linear map 1-10 → 800-1600.
+   New players seed effective Elo from skill: linear map 1-5 → 800-1600.
 2. **updateElo(sideA, sideB, scoreA, scoreB)** — team Elo = player average; expected = `1/(1+10^((eloB−eloA)/400))`; K = 32 scaled by `ln(|margin|+1)`; same delta per player on a side; returns deltas (pure).
 3. **suggestSwap(teamX, teamY, familiarity)** — minimize post-swap team Elo gap; tie-break on lower familiarity.
 
 ## Screens
 
-1. **Players** — roster CRUD (name, skill 1-10), live Elo. Generate requires exactly 12 active.
+1. **Players** — roster CRUD (name, skill 1-5), live Elo. Generate requires exactly 12 active.
 2. **Teams** — generate 3 balanced teams with Elo totals; manual tap-to-swap override; "Start session".
 3. **Session** — courtside dark UI, big touch targets; pick 2 of 3 teams; score entry (no ties, integers ≥ 0); Elo updates immediately; today's match list; undo last match (exact delta revert); swap-suggestion modal; end session.
 4. **History** — past sessions + matches; player table sorted by Elo.
