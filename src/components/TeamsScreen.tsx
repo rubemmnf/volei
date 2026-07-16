@@ -141,11 +141,8 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
                 data-testid={`preview-${TEAM_META[i].name}`}
                 className={`bg-zinc-900 rounded-2xl p-4 border ${TEAM_META[i].border}`}
               >
-                <div className="flex justify-between items-baseline mb-2">
+                <div className="mb-2">
                   <h3 className={`font-black ${TEAM_META[i].text}`}>{TEAM_META[i].name}</h3>
-                  <span className="text-xs text-zinc-500 font-bold">
-                    Σ {Math.round(team.reduce((sum, p) => sum + p.elo, 0))}
-                  </span>
                 </div>
                 <ul className="grid grid-cols-2 gap-2">
                   {team.map((player) => {
