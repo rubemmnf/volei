@@ -89,7 +89,7 @@ describe("attendance flow", () => {
     await user.click(screen.getByRole("button", { name: "P5" }));
     await user.click(screen.getByRole("button", { name: /generate teams/i }));
 
-    for (const teamName of ["Team A", "Team B", "Team C"]) {
+    for (const teamName of ["Time A", "Time B", "Time C"]) {
       const card = screen.getByTestId(`preview-${teamName}`);
       expect(within(card).queryByText("P5")).not.toBeInTheDocument();
     }
@@ -152,7 +152,7 @@ describe("generate flow", () => {
     await user.click(screen.getByRole("button", { name: "Teams" }));
     await user.click(screen.getByRole("button", { name: /generate teams/i }));
 
-    for (const teamName of ["Team A", "Team B", "Team C"]) {
+    for (const teamName of ["Time A", "Time B", "Time C"]) {
       const card = screen.getByTestId(`preview-${teamName}`);
       expect(within(card).getAllByRole("listitem")).toHaveLength(4);
     }
@@ -165,8 +165,8 @@ describe("generate flow", () => {
 describe("session flow", () => {
   async function selectTeamsAB(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("button", { name: "Session" }));
-    await user.click(screen.getByRole("button", { name: /^Team A/ }));
-    await user.click(screen.getByRole("button", { name: /^Team B/ }));
+    await user.click(screen.getByRole("button", { name: /^Time A/ }));
+    await user.click(screen.getByRole("button", { name: /^Time B/ }));
   }
 
   test("records a match and undo removes it", async () => {
@@ -174,8 +174,8 @@ describe("session flow", () => {
     const user = userEvent.setup();
     render(<App />);
     await selectTeamsAB(user);
-    await user.type(screen.getByLabelText("Score Team A"), "25");
-    await user.type(screen.getByLabelText("Score Team B"), "19");
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "19");
     await user.click(screen.getByRole("button", { name: /save match/i }));
 
     expect(screen.getByText(/25\s*[–-]\s*19/)).toBeInTheDocument();
@@ -189,8 +189,8 @@ describe("session flow", () => {
     const user = userEvent.setup();
     render(<App />);
     await selectTeamsAB(user);
-    await user.type(screen.getByLabelText("Score Team A"), "20");
-    await user.type(screen.getByLabelText("Score Team B"), "20");
+    await user.type(screen.getByLabelText("Score Time A"), "20");
+    await user.type(screen.getByLabelText("Score Time B"), "20");
     expect(screen.getByRole("button", { name: /save match/i })).toBeDisabled();
   });
 });
