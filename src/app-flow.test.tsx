@@ -1,13 +1,26 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import { saveState } from "./storage";
-import type { AppState } from "./types";
+import { renderTeamsImage } from "./export/teams-image";
+import type { AppState, Match } from "./types";
+
+// jsdom has no canvas backend — keep the painter out of the component tests and
+// assert on the model it is handed instead.
+vi.mock("./export/teams-image", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./export/teams-image")>()),
+  renderTeamsImage: vi.fn(() => Promise.resolve(new Blob(["png"], { type: "image/png" }))),
+  shareTeamsImage: vi.fn(() => Promise.resolve()),
+  downloadTeamsImage: vi.fn(),
+}));
 
 beforeEach(() => {
   localStorage.clear();
+  vi.clearAllMocks();
+  URL.createObjectURL = vi.fn(() => "blob:mock-teams-image");
+  URL.revokeObjectURL = vi.fn();
 });
 
 function rosterState(count: number): AppState {
@@ -28,6 +41,12 @@ function twelvePlayersState(): AppState {
   return rosterState(12);
 }
 
+const SESSION_TEAMS: [string[], string[], string[]] = [
+  ["p1", "p2", "p3", "p4"],
+  ["p5", "p6", "p7", "p8"],
+  ["p9", "p10", "p11", "p12"],
+];
+
 function activeSessionState(): AppState {
   return {
     ...twelvePlayersState(),
@@ -35,13 +54,40 @@ function activeSessionState(): AppState {
       {
         id: "s1",
         date: "2026-07-10",
-        teams: [
-          ["p1", "p2", "p3", "p4"],
-          ["p5", "p6", "p7", "p8"],
-          ["p9", "p10", "p11", "p12"],
-        ],
+        teams: SESSION_TEAMS,
         matches: [],
         finished: false,
+      },
+    ],
+  };
+}
+
+function playedMatch(
+  id: string,
+  sideA: string[],
+  sideB: string[],
+  scoreA: number,
+  scoreB: number,
+): Match {
+  return { id, sideA, sideB, scoreA, scoreB, deltaA: 0, deltaB: 0, timestamp: id };
+}
+
+/** Time A wins twice (+6, +5), Time B once (+2), Time C never. */
+function finishedSessionState(): AppState {
+  const [teamA, teamB, teamC] = SESSION_TEAMS;
+  return {
+    ...twelvePlayersState(),
+    sessions: [
+      {
+        id: "s1",
+        date: "2026-07-10",
+        teams: SESSION_TEAMS,
+        matches: [
+          playedMatch("m1", teamA, teamB, 25, 19),
+          playedMatch("m2", teamC, teamA, 20, 25),
+          playedMatch("m3", teamB, teamC, 25, 23),
+        ],
+        finished: true,
       },
     ],
   };
@@ -192,5 +238,236 @@ describe("session flow", () => {
     await user.type(screen.getByLabelText("Score Time A"), "20");
     await user.type(screen.getByLabelText("Score Time B"), "20");
     expect(screen.getByRole("button", { name: /save match/i })).toBeDisabled();
+  });
+
+  test("lists today's matches in the order they were recorded", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "19");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+    await user.type(screen.getByLabelText("Score Time A"), "21");
+    await user.type(screen.getByLabelText("Score Time B"), "25");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+
+    const played = screen.getAllByRole("listitem");
+    expect(played[0]).toHaveTextContent("25–19");
+    expect(played[1]).toHaveTextContent("21–25");
+  });
+
+  test("tap order drives the badges, the score boxes and the recorded match", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+    // Tap C first, then A — the badge must not disturb the /^Time …/ name anchor.
+    await user.click(screen.getByRole("button", { name: /^Time C/ }));
+    await user.click(screen.getByRole("button", { name: /^Time A/ }));
+
+    expect(screen.getByRole("button", { name: /^Time C/, pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Time B/ })).toHaveAttribute("aria-pressed", "false");
+    expect(
+      within(screen.getByRole("button", { name: /^Time C/ })).getByText("1"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("button", { name: /^Time A/ })).getByText("2"),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Score Time C"), "25");
+    await user.type(screen.getByLabelText("Score Time A"), "19");
+    expect(screen.getByRole("status")).toHaveTextContent(/Time C 25\s*[–-]\s*19\s*Time A/);
+    // The live preview must not answer the saved-match-list query.
+    expect(screen.queryAllByText(/25\s*[–-]\s*19/)).toHaveLength(0);
+
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+    expect(screen.getByText(/Time C 25\s*[–-]\s*19\s*Time A/)).toBeInTheDocument();
+  });
+
+  test("changing one of the two selected teams clears typed scores", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+
+    // slice(-2) keeps B + C selected, so ScoreEntry stays mounted unless it is re-keyed.
+    await user.click(screen.getByRole("button", { name: /^Time C/ }));
+
+    expect(screen.getByLabelText("Score Time B")).toHaveValue(null);
+    expect(screen.getByLabelText("Score Time C")).toHaveValue(null);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  test("deselecting a team hides score entry and keeps the first badge", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+    expect(screen.getByLabelText("Score Time A")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Time B/ }));
+
+    expect(screen.queryByLabelText("Score Time A")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("button", { name: /^Time A/ })).getByText("1"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("history flow", () => {
+  async function openHistory() {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "History" }));
+    return screen.getByTestId("session-s1");
+  }
+
+  test("lists the matches of a past session in the order they were recorded", async () => {
+    saveState(finishedSessionState());
+    const card = await openHistory();
+
+    expect(within(card).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "Time A 25–19 Time B",
+      "Time C 20–25 Time A",
+      "Time B 25–23 Time C",
+    ]);
+  });
+
+  test("shows wins and accumulated point difference per team", async () => {
+    saveState(finishedSessionState());
+    const card = await openHistory();
+
+    const rowA = within(card).getByTestId("session-stat-s1-0");
+    expect(within(rowA).getByText("Time A")).toBeInTheDocument();
+    expect(within(rowA).getByText("2W")).toBeInTheDocument();
+    expect(within(rowA).getByText("+11")).toBeInTheDocument();
+
+    const rowB = within(card).getByTestId("session-stat-s1-1");
+    expect(within(rowB).getByText("1W")).toBeInTheDocument();
+    expect(within(rowB).getByText("+2")).toBeInTheDocument();
+
+    const rowC = within(card).getByTestId("session-stat-s1-2");
+    expect(within(rowC).getByText("0W")).toBeInTheDocument();
+    expect(within(rowC).getByText("+0")).toBeInTheDocument();
+  });
+
+  test("names the team that won the session", async () => {
+    saveState(finishedSessionState());
+    const card = await openHistory();
+
+    expect(within(card).getByText("Winner: Time A")).toBeInTheDocument();
+  });
+
+  test("shows a tie when two teams end level on wins and point difference", async () => {
+    const [teamA, teamB, teamC] = SESSION_TEAMS;
+    const base = finishedSessionState();
+    saveState({
+      ...base,
+      sessions: [
+        {
+          ...base.sessions[0],
+          matches: [
+            playedMatch("m1", teamA, teamC, 25, 20),
+            playedMatch("m2", teamB, teamC, 25, 20),
+          ],
+        },
+      ],
+    });
+    const card = await openHistory();
+
+    expect(within(card).getByText("Tie: Time A · Time B")).toBeInTheDocument();
+  });
+});
+
+const VARIED_ELOS = [1520, 1480, 1400, 1330, 1290, 1240, 1180, 1120, 1060, 1010, 960, 900];
+const ELO_BY_NAME = new Map(VARIED_ELOS.map((elo, i) => [`V${i + 1}`, elo]));
+
+function variedRosterState(): AppState {
+  return {
+    version: 1,
+    players: VARIED_ELOS.map((elo, i) => ({
+      id: `v${i + 1}`,
+      name: `V${i + 1}`,
+      skill: 3,
+      elo,
+      active: true,
+    })),
+    sessions: [],
+  };
+}
+
+async function generatePreview() {
+  saveState(variedRosterState());
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole("button", { name: "Teams" }));
+  await user.click(screen.getByRole("button", { name: /generate teams/i }));
+  return user;
+}
+
+describe("teams preview totals and swap suggestions", () => {
+  test("shows each team's Elo total on its card", async () => {
+    await generatePreview();
+
+    for (const teamName of ["Time A", "Time B", "Time C"]) {
+      const card = screen.getByTestId(`preview-${teamName}`);
+      const total = within(card)
+        .getAllByRole("button")
+        .reduce((sum, button) => sum + ELO_BY_NAME.get(button.textContent!)!, 0);
+
+      expect(within(card).getByText(String(total))).toBeInTheDocument();
+    }
+  });
+
+  test("lists three swaps per team pair, least disruptive first", async () => {
+    await generatePreview();
+
+    for (const testId of ["swaps-0-1", "swaps-0-2", "swaps-1-2"]) {
+      const rows = within(screen.getByTestId(testId)).getAllByRole("button");
+      expect(rows).toHaveLength(3);
+
+      const shifts = rows.map((row) => Number(row.textContent!.match(/±(\d+)/)![1]));
+      expect(shifts).toEqual([...shifts].sort((a, b) => a - b));
+    }
+  });
+
+  test("tapping a suggestion trades the two players between their teams", async () => {
+    const user = await generatePreview();
+    const row = within(screen.getByTestId("swaps-0-1")).getAllByRole("button")[0];
+    const [, fromA, fromB] = row.getAttribute("aria-label")!.match(/^Swap (\S+) with (\S+)$/)!;
+
+    await user.click(row);
+
+    expect(within(screen.getByTestId("preview-Time A")).getByText(fromB)).toBeInTheDocument();
+    expect(within(screen.getByTestId("preview-Time B")).getByText(fromA)).toBeInTheDocument();
+  });
+});
+
+describe("teams export", () => {
+  test("hands the painter a model with no Elo and no suggestions", async () => {
+    const user = await generatePreview();
+    await user.click(screen.getByRole("button", { name: /exportar imagem/i }));
+
+    expect(renderTeamsImage).toHaveBeenCalledTimes(1);
+    const model = vi.mocked(renderTeamsImage).mock.calls[0][0];
+
+    expect(model.teams).toHaveLength(3);
+    expect(model.teams.flatMap((team) => team.players)).toHaveLength(12);
+    const serialized = JSON.stringify(model);
+    for (const elo of VARIED_ELOS) {
+      expect(serialized).not.toContain(String(elo));
+    }
+  });
+
+  test("previews the generated image before anything is shared", async () => {
+    const user = await generatePreview();
+    await user.click(screen.getByRole("button", { name: /exportar imagem/i }));
+
+    expect(await screen.findByAltText(/^Times ·/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /compartilhar/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /baixar/i })).toBeInTheDocument();
   });
 });

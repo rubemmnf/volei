@@ -1,4 +1,5 @@
 import type { Player } from "../types";
+import { teamElo } from "./elo";
 import { getPartitions } from "./partitions";
 import { teamFamiliarity, type FamiliarityMatrix } from "./familiarity";
 
@@ -32,7 +33,7 @@ export function generateTeams(
 }
 
 function partitionCost(partition: [Player[], Player[], Player[]], matrix: FamiliarityMatrix): number {
-  const sums = partition.map((team) => team.reduce((sum, p) => sum + p.elo, 0));
+  const sums = partition.map(teamElo);
   const mean = (sums[0] + sums[1] + sums[2]) / 3;
   const variance = sums.reduce((sum, x) => sum + (x - mean) ** 2, 0) / 3;
 

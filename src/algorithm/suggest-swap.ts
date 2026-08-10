@@ -1,4 +1,5 @@
 import type { Player } from "../types";
+import { teamElo } from "./elo";
 import { teamFamiliarity, type FamiliarityMatrix } from "./familiarity";
 
 const TEAM_SIZE = 4;
@@ -19,8 +20,8 @@ export function suggestSwap(
     throw new Error(`Both teams must have exactly ${TEAM_SIZE} players`);
   }
 
-  const sumX = teamX.reduce((sum, p) => sum + p.elo, 0);
-  const sumY = teamY.reduce((sum, p) => sum + p.elo, 0);
+  const sumX = teamElo(teamX);
+  const sumY = teamElo(teamY);
 
   let best: SwapSuggestion | null = null;
   let bestDiff = Math.abs(sumX - sumY);

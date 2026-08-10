@@ -1,12 +1,17 @@
 import { useState } from "react";
 import type { AppState, Player } from "../types";
 import { activeSession, type AppAction } from "../app-state";
+import { teamElo } from "../algorithm/elo";
 import { buildFamiliarityMatrix } from "../algorithm/familiarity";
 import { generateTeams } from "../algorithm/generate-teams";
+import { buildExportModel, exportFilename, type ExportModel } from "../export/teams-image";
+import { ExportModal } from "./ExportModal";
+import { SwapSuggestions } from "./SwapSuggestions";
 import { TEAM_META } from "./team-meta";
 
 type Preview = [Player[], Player[], Player[]];
 type Selection = { team: number; playerId: string };
+type PendingExport = { model: ExportModel; filename: string };
 
 type Props = {
   state: AppState;
@@ -17,6 +22,7 @@ type Props = {
 export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [pendingExport, setPendingExport] = useState<PendingExport | null>(null);
 
   const session = activeSession(state);
   if (session) {
@@ -49,12 +55,14 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
     dispatch({ type: "set-player-active", id: playerId, active });
     setPreview(null);
     setSelection(null);
+    setPendingExport(null);
   };
 
   const handleGenerate = () => {
     const matrix = buildFamiliarityMatrix(state.sessions, new Date());
     setPreview(generateTeams(attending, matrix));
     setSelection(null);
+    setPendingExport(null);
   };
 
   const handlePlayerTap = (team: number, playerId: string) => {
@@ -65,6 +73,18 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
     }
     setPreview(swapInPreview(validPreview, selection, { team, playerId }));
     setSelection(null);
+  };
+
+  const handleSuggestedSwap = (a: Selection, b: Selection) => {
+    if (!validPreview) return;
+    setPreview(swapInPreview(validPreview, a, b));
+    setSelection(null);
+  };
+
+  const handleExport = () => {
+    if (!validPreview) return;
+    const now = new Date();
+    setPendingExport({ model: buildExportModel(validPreview, now), filename: exportFilename(now) });
   };
 
   const handleStart = () => {
@@ -141,8 +161,11 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
                 data-testid={`preview-${TEAM_META[i].name}`}
                 className={`bg-zinc-900 rounded-2xl p-4 border ${TEAM_META[i].border}`}
               >
-                <div className="mb-2">
+                <div className="mb-2 flex items-baseline justify-between gap-3">
                   <h3 className={`font-black ${TEAM_META[i].text}`}>{TEAM_META[i].name}</h3>
+                  <span className="text-xs font-black text-zinc-500 tabular-nums">
+                    {teamElo(team)}
+                  </span>
                 </div>
                 <ul className="grid grid-cols-2 gap-2">
                   {team.map((player) => {
@@ -165,6 +188,17 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
               </div>
             ))}
           </div>
+
+          <SwapSuggestions preview={validPreview} onSwap={handleSuggestedSwap} />
+
+          <button
+            type="button"
+            onClick={handleExport}
+            className="w-full border border-zinc-700 text-white font-bold py-4 rounded-xl"
+          >
+            Exportar imagem
+          </button>
+
           <button
             type="button"
             onClick={handleStart}
@@ -173,6 +207,14 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
             Start Session
           </button>
         </>
+      )}
+
+      {validPreview && pendingExport && (
+        <ExportModal
+          model={pendingExport.model}
+          filename={pendingExport.filename}
+          onClose={() => setPendingExport(null)}
+        />
       )}
     </div>
   );

@@ -11,6 +11,11 @@ export function skillToElo(skill: number): number {
   return Math.round(MIN_ELO + fraction * (MAX_ELO - MIN_ELO));
 }
 
+/** Combined Elo of a team — the number the organizer balances on. */
+export function teamElo(team: Player[]): number {
+  return team.reduce((sum, p) => sum + p.elo, 0);
+}
+
 export type EloDeltas = { deltaA: number; deltaB: number };
 
 /**
@@ -39,5 +44,5 @@ export function computeEloDeltas(
 }
 
 function averageElo(team: Player[]): number {
-  return team.reduce((sum, p) => sum + p.elo, 0) / team.length;
+  return teamElo(team) / team.length;
 }

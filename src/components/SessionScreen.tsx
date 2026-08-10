@@ -103,17 +103,40 @@ export function SessionScreen({ state, dispatch }: Props) {
       <p className="text-zinc-500 text-xs">Tap the two teams about to play.</p>
       <div className="flex flex-col gap-3">
         {session.teams.map((teamIds, i) => {
-          const isSelected = selected.includes(i);
+          const meta = TEAM_META[i];
+          const order = selected.indexOf(i); // -1 while unselected
+          const isSelected = order >= 0;
           return (
             <button
-              key={TEAM_META[i].name}
+              key={meta.name}
               type="button"
+              aria-pressed={isSelected}
               onClick={() => toggleTeam(i)}
-              className={`text-left bg-zinc-900 rounded-2xl p-4 border-2 transition-colors ${
-                isSelected ? TEAM_META[i].border.replace("/40", "") : "border-zinc-800"
-              } ${isSelected ? TEAM_META[i].bg : ""}`}
+              // bg-zinc-900 is omitted when selected: it and meta.bg both set background-color,
+              // and CSS source order — not class order — would decide the winner.
+              className={`text-left rounded-2xl p-4 border-2 transition-colors ${
+                isSelected
+                  ? `${meta.borderStrong} ${meta.bg}`
+                  : "bg-zinc-900 border-zinc-800"
+              }`}
             >
-              <span className={`font-black ${TEAM_META[i].text}`}>{TEAM_META[i].name}</span>
+              <span className="flex items-center gap-2">
+                {isSelected && (
+                  // aria-hidden keeps the digit out of the accessible name, which tests anchor on.
+                  <span
+                    aria-hidden="true"
+                    className={`shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-black border text-xs font-black ${meta.borderStrong} ${meta.text}`}
+                  >
+                    {order + 1}
+                  </span>
+                )}
+                <span className={`font-black ${meta.text}`}>{meta.name}</span>
+                {isSelected && (
+                  <span className="sr-only">
+                    {order === 0 ? "picked first" : "picked second"}
+                  </span>
+                )}
+              </span>
               <span className="block text-sm text-zinc-400 mt-1">
                 {resolveTeam(teamIds)
                   .map((p) => p.name)
@@ -125,9 +148,12 @@ export function SessionScreen({ state, dispatch }: Props) {
       </div>
 
       {bothSelected && (
+        // Keyed by the pairing: tapping a third team keeps two teams selected, so without
+        // this the typed scores would survive and be recorded against the wrong teams.
         <ScoreEntry
-          teamAName={TEAM_META[selected[0]].name}
-          teamBName={TEAM_META[selected[1]].name}
+          key={`${selected[0]}-${selected[1]}`}
+          teamA={TEAM_META[selected[0]]}
+          teamB={TEAM_META[selected[1]]}
           onSave={handleSave}
         />
       )}
@@ -205,7 +231,7 @@ function MatchList({ session, playerById }: { session: Session; playerById: Map<
         Today's Matches
       </h3>
       <ul className="flex flex-col gap-1">
-        {[...session.matches].reverse().map((match) => (
+        {session.matches.map((match) => (
           <li key={match.id} className="text-sm text-zinc-300">
             {matchLabel(match, session, playerById)}
           </li>

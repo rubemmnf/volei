@@ -1,5 +1,7 @@
-import type { AppState, Player } from "../types";
+import type { AppState, Player, Session } from "../types";
+import { sessionWinners, teamStats } from "../algorithm/session-stats";
 import { matchLabel } from "./SessionScreen";
+import { TEAM_META } from "./team-meta";
 
 type Props = {
   state: AppState;
@@ -25,7 +27,11 @@ export function HistoryScreen({ state }: Props) {
       </h2>
       {finished.length === 0 && <p className="text-zinc-500 text-sm">No finished sessions yet.</p>}
       {finished.map((session) => (
-        <div key={session.id} className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
+        <div
+          key={session.id}
+          data-testid={`session-${session.id}`}
+          className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800"
+        >
           <div className="flex justify-between items-baseline mb-2">
             <h3 className="font-black text-white">{session.date}</h3>
             <span className="text-xs text-zinc-500 font-bold">
@@ -39,8 +45,39 @@ export function HistoryScreen({ state }: Props) {
               </li>
             ))}
           </ul>
+          <SessionSummary session={session} />
         </div>
       ))}
+    </div>
+  );
+}
+
+function SessionSummary({ session }: { session: Session }) {
+  const stats = teamStats(session);
+  const winners = sessionWinners(stats);
+  if (winners.length === 0) return null;
+
+  const winnerLabel =
+    winners.length === 1
+      ? `Winner: ${TEAM_META[winners[0]].name}`
+      : `Tie: ${winners.map((index) => TEAM_META[index].name).join(" · ")}`;
+
+  return (
+    <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-col gap-1">
+      {stats.map((stat) => (
+        <div
+          key={stat.teamIndex}
+          data-testid={`session-stat-${session.id}-${stat.teamIndex}`}
+          className="flex items-baseline gap-3 text-sm"
+        >
+          <span className={`flex-1 font-bold ${TEAM_META[stat.teamIndex].text}`}>
+            {TEAM_META[stat.teamIndex].name}
+          </span>
+          <span className="text-zinc-300 font-bold">{stat.wins}W</span>
+          <span className="text-zinc-500 font-bold w-10 text-right">+{stat.pointDiff}</span>
+        </div>
+      ))}
+      <p className="text-white font-black text-sm mt-1">{winnerLabel}</p>
     </div>
   );
 }
