@@ -1,5 +1,6 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { activeSession, appReducer, initialState, type AppAction } from "./app-state";
+import { deriveRatings } from "./algorithm/derive-ratings";
 import { importState, loadState, saveState } from "./storage";
 import type { AppState } from "./types";
 import { PlayersScreen } from "./components/PlayersScreen";
@@ -27,6 +28,10 @@ export default function App() {
     loaded.status === "ok" && activeSession(loaded.state) ? "session" : "players",
   );
   const [showSettings, setShowSettings] = useState(false);
+
+  // Ratings are replayed from match history, not stored, so correcting a score
+  // anywhere in the past re-rates everything after it.
+  const players = useMemo(() => deriveRatings(state), [state]);
 
   useEffect(() => {
     if (!blocked) saveState(state);
@@ -61,12 +66,23 @@ export default function App() {
       </header>
 
       <main className="flex-1 p-4 pb-24">
-        {tab === "players" && <PlayersScreen state={state} dispatch={dispatch} />}
-        {tab === "teams" && (
-          <TeamsScreen state={state} dispatch={dispatch} onSessionStarted={() => setTab("session")} />
+        {tab === "players" && (
+          <PlayersScreen state={state} players={players} dispatch={dispatch} />
         )}
-        {tab === "session" && <SessionScreen state={state} dispatch={dispatch} />}
-        {tab === "history" && <HistoryScreen state={state} />}
+        {tab === "teams" && (
+          <TeamsScreen
+            state={state}
+            players={players}
+            dispatch={dispatch}
+            onSessionStarted={() => setTab("session")}
+          />
+        )}
+        {tab === "session" && (
+          <SessionScreen state={state} players={players} dispatch={dispatch} />
+        )}
+        {tab === "history" && (
+          <HistoryScreen state={state} players={players} dispatch={dispatch} />
+        )}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 bg-zinc-950/95 border-t border-zinc-800 flex backdrop-blur pb-[env(safe-area-inset-bottom)]">

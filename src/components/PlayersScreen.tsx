@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MAX_SKILL, MIN_SKILL, type AppState } from "../types";
+import { MAX_SKILL, MIN_SKILL, type AppState, type Player } from "../types";
 import { isPlayerReferenced, type AppAction } from "../app-state";
 
 const SKILLS = Array.from({ length: MAX_SKILL - MIN_SKILL + 1 }, (_, i) => MIN_SKILL + i);
@@ -7,10 +7,11 @@ const DEFAULT_SKILL = 3;
 
 type Props = {
   state: AppState;
+  players: Player[];
   dispatch: (action: AppAction) => void;
 };
 
-export function PlayersScreen({ state, dispatch }: Props) {
+export function PlayersScreen({ state, players, dispatch }: Props) {
   const [name, setName] = useState("");
   const [skill, setSkill] = useState(DEFAULT_SKILL);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -23,14 +24,14 @@ export function PlayersScreen({ state, dispatch }: Props) {
     setSkill(DEFAULT_SKILL);
   };
 
-  const sorted = [...state.players].sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-between items-baseline">
         <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Roster</h2>
         <span className="text-zinc-500 text-sm font-bold">
-          {state.players.length} in roster
+          {players.length} in roster
         </span>
       </div>
 

@@ -4,7 +4,7 @@ import { buildFamiliarityMatrix, pairKey, type FamiliarityMatrix } from "./famil
 import type { Player, Session } from "../types";
 
 function makePlayer(id: string, elo: number): Player {
-  return { id, name: id, skill: 5, elo, active: true };
+  return { id, name: id, skill: 5, baseElo: elo, elo, active: true };
 }
 
 const EMPTY_MATRIX = buildFamiliarityMatrix([], new Date("2026-07-10"));
@@ -54,7 +54,14 @@ describe("generateTeams", () => {
       ["p8", "p9", "p10", "p11"],
     ];
     const history: Session[] = [
-      { id: "s1", date: "2026-07-03", teams: together, matches: [], finished: true },
+      {
+        id: "s1",
+        date: "2026-07-03",
+        teams: together,
+        matches: [],
+        finished: true,
+        balancingRounds: 0,
+      },
     ];
     const matrix = buildFamiliarityMatrix(history, new Date("2026-07-10"));
     const teams = generateTeams(players, matrix);

@@ -3,7 +3,7 @@ import { buildExportModel } from "./teams-image";
 import type { Player } from "../types";
 
 function makePlayer(name: string, elo: number): Player {
-  return { id: name.toLowerCase(), name, skill: 3, elo, active: true };
+  return { id: name.toLowerCase(), name, skill: 3, baseElo: elo, elo, active: true };
 }
 
 const PREVIEW: Player[][] = [

@@ -1,4 +1,4 @@
-import type { AppState, Match, Player } from "./types";
+import type { AppState, Match, StoredPlayer } from "./types";
 import { skillToElo } from "./algorithm/elo";
 
 export type AppAction =
@@ -10,11 +10,19 @@ export type AppAction =
   | { type: "end-session" }
   | { type: "record-match"; match: Match }
   | { type: "undo-last-match" }
+  | { type: "set-balancing-rounds"; count: number }
+  | {
+      type: "edit-match-score";
+      sessionId: string;
+      matchId: string;
+      scoreA: number;
+      scoreB: number;
+    }
   | { type: "apply-swap"; teamA: number; playerA: string; teamB: number; playerB: string }
   | { type: "replace-state"; state: AppState };
 
 export function initialState(): AppState {
-  return { version: 1, players: [], sessions: [] };
+  return { version: 2, players: [], sessions: [] };
 }
 
 export function activeSession(state: AppState) {
@@ -32,11 +40,11 @@ export function isPlayerReferenced(state: AppState, playerId: string): boolean {
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "add-player": {
-      const player: Player = {
+      const player: StoredPlayer = {
         id: action.id,
         name: action.name,
         skill: action.skill,
-        elo: skillToElo(action.skill),
+        baseElo: skillToElo(action.skill),
         active: true,
       };
       return { ...state, players: [...state.players, player] };
@@ -47,8 +55,10 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         players: state.players.map((p) => {
           if (p.id !== action.id) return p;
-          const elo = isPlayerReferenced(state, p.id) ? p.elo : skillToElo(action.skill);
-          return { ...p, name: action.name, skill: action.skill, elo };
+          // Reseeding a veteran would rewrite their whole replayed history, so
+          // the seed is frozen once the player appears in a session.
+          const baseElo = isPlayerReferenced(state, p.id) ? p.baseElo : skillToElo(action.skill);
+          return { ...p, name: action.name, skill: action.skill, baseElo };
         }),
       };
     }
@@ -71,6 +81,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         teams: action.teams,
         matches: [],
         finished: false,
+        balancingRounds: 0,
       };
       return { ...state, sessions: [...state.sessions, session] };
     }
@@ -80,26 +91,54 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case "record-match": {
       if (!activeSession(state)) return state;
-      const withMatch = mapActiveSession(state, (s) => ({
-        ...s,
-        matches: [...s.matches, action.match],
-      }));
-      return applyDeltas(withMatch, action.match, +1);
+      return mapActiveSession(state, (s) => ({ ...s, matches: [...s.matches, action.match] }));
     }
 
     case "undo-last-match": {
       const session = activeSession(state);
-      const last = session?.matches.at(-1);
-      if (!session || !last) return state;
-      const withoutMatch = mapActiveSession(state, (s) => ({
+      if (!session || session.matches.length === 0) return state;
+      return mapActiveSession(state, (s) => ({ ...s, matches: s.matches.slice(0, -1) }));
+    }
+
+    // Only the active session: once the night is over its standings are frozen.
+    case "set-balancing-rounds":
+      return mapActiveSession(state, (s) => ({
         ...s,
-        matches: s.matches.slice(0, -1),
+        balancingRounds: Math.max(0, Math.trunc(action.count)),
       }));
-      return applyDeltas(withoutMatch, last, -1);
+
+    case "edit-match-score": {
+      // Deliberately not via mapActiveSession: correcting a mistyped score has to
+      // reach finished sessions too. Ratings need no fixing up here — they are
+      // replayed from these scores.
+      if (action.scoreA === action.scoreB) return state;
+      return {
+        ...state,
+        sessions: state.sessions.map((s) => {
+          if (s.id !== action.sessionId) return s;
+          return {
+            ...s,
+            matches: s.matches.map((m) =>
+              m.id === action.matchId
+                ? { ...m, scoreA: action.scoreA, scoreB: action.scoreB }
+                : m,
+            ),
+          };
+        }),
+      };
     }
 
     case "apply-swap":
       return mapActiveSession(state, (s) => {
+        // Without this, a player id that is not on the team it is swapped from
+        // makes the filter below a no-op and grows that team to five, which then
+        // fails the 4-player schema on the next load.
+        if (
+          !s.teams[action.teamA]?.includes(action.playerA) ||
+          !s.teams[action.teamB]?.includes(action.playerB)
+        ) {
+          return s;
+        }
         const teams = s.teams.map((team, i) => {
           if (i === action.teamA) {
             return [...team.filter((id) => id !== action.playerA), action.playerB];
@@ -124,16 +163,5 @@ function mapActiveSession(
   return {
     ...state,
     sessions: state.sessions.map((s) => (s.finished ? s : update(s))),
-  };
-}
-
-function applyDeltas(state: AppState, match: Match, sign: 1 | -1): AppState {
-  return {
-    ...state,
-    players: state.players.map((p) => {
-      if (match.sideA.includes(p.id)) return { ...p, elo: p.elo + sign * match.deltaA };
-      if (match.sideB.includes(p.id)) return { ...p, elo: p.elo + sign * match.deltaB };
-      return p;
-    }),
   };
 }

@@ -25,12 +25,12 @@ beforeEach(() => {
 
 function rosterState(count: number): AppState {
   return {
-    version: 1,
+    version: 2,
     players: Array.from({ length: count }, (_, i) => ({
       id: `p${i + 1}`,
       name: `P${i + 1}`,
       skill: 5,
-      elo: 1156,
+      baseElo: 1156,
       active: true,
     })),
     sessions: [],
@@ -57,6 +57,7 @@ function activeSessionState(): AppState {
         teams: SESSION_TEAMS,
         matches: [],
         finished: false,
+        balancingRounds: 0,
       },
     ],
   };
@@ -69,7 +70,7 @@ function playedMatch(
   scoreA: number,
   scoreB: number,
 ): Match {
-  return { id, sideA, sideB, scoreA, scoreB, deltaA: 0, deltaB: 0, timestamp: id };
+  return { id, sideA, sideB, scoreA, scoreB, timestamp: id };
 }
 
 /** Time A wins twice (+6, +5), Time B once (+2), Time C never. */
@@ -88,6 +89,7 @@ function finishedSessionState(): AppState {
           playedMatch("m3", teamB, teamC, 25, 23),
         ],
         finished: true,
+        balancingRounds: 0,
       },
     ],
   };
@@ -153,7 +155,7 @@ describe("state replacement resilience", () => {
 
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const replacement = {
-      version: 1,
+      version: 2,
       players: rosterState(12).players.map((p) => ({
         ...p,
         id: `new-${p.id}`,
@@ -178,7 +180,14 @@ describe("state replacement resilience", () => {
     saveState({
       ...twelvePlayersState(),
       sessions: [
-        { id: "s1", date: "2026-07-10", teams: ghostTeams, matches: [], finished: false },
+        {
+          id: "s1",
+          date: "2026-07-10",
+          teams: ghostTeams,
+          matches: [],
+          finished: false,
+          balancingRounds: 0,
+        },
       ],
     });
     render(<App />);
@@ -228,6 +237,26 @@ describe("session flow", () => {
 
     await user.click(screen.getByRole("button", { name: /undo last match/i }));
     expect(screen.queryByText(/25\s*[–-]\s*19/)).not.toBeInTheDocument();
+  });
+
+  // Every seeded player has the same rating, so the algorithm has nothing to
+  // suggest — the group still has to be able to make the trade it wants.
+  test("a swap the algorithm never suggested can be made by hand", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+    await user.click(screen.getByRole("button", { name: /swap players/i }));
+
+    expect(screen.getByText(/already balanced/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /choose manually/i }));
+    await user.click(screen.getByRole("button", { name: "P1" }));
+    await user.click(screen.getByRole("button", { name: "P5" }));
+    await user.click(screen.getByRole("button", { name: /apply swap/i }));
+
+    expect(screen.getByRole("button", { name: /^Time A/ })).toHaveTextContent(/\bP5\b/);
+    expect(screen.getByRole("button", { name: /^Time A/ })).not.toHaveTextContent(/\bP1\b/);
+    expect(screen.getByRole("button", { name: /^Time B/ })).toHaveTextContent(/\bP1\b/);
   });
 
   test("save stays disabled on a tied score", async () => {
@@ -301,6 +330,28 @@ describe("session flow", () => {
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
+  test("marks the first N matches as balancing rounds", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "19");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+    await user.type(screen.getByLabelText("Score Time A"), "21");
+    await user.type(screen.getByLabelText("Score Time B"), "25");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+
+    expect(screen.getByRole("button", { name: /fewer balancing rounds/i })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /more balancing rounds/i }));
+
+    const played = screen.getAllByRole("listitem");
+    expect(played[0]).toHaveTextContent(/balancing/i);
+    expect(played[1]).not.toHaveTextContent(/balancing/i);
+    expect(screen.getByRole("button", { name: /fewer balancing rounds/i })).toBeEnabled();
+  });
+
   test("deselecting a team hides score entry and keeps the first badge", async () => {
     saveState(activeSessionState());
     const user = userEvent.setup();
@@ -361,6 +412,21 @@ describe("history flow", () => {
     expect(within(card).getByText("Winner: Time A")).toBeInTheDocument();
   });
 
+  test("keeps the balancing rounds out of the night's standings and winner", async () => {
+    const base = finishedSessionState();
+    saveState({
+      ...base,
+      sessions: [{ ...base.sessions[0], balancingRounds: 2 }],
+    });
+    const card = await openHistory();
+
+    // Only m3 counts: Time B beat Time C by 2.
+    expect(within(card).getByTestId("session-stat-s1-0").textContent).toContain("0W");
+    expect(within(card).getByTestId("session-stat-s1-1").textContent).toContain("1W");
+    expect(within(card).getByText("Winner: Time B")).toBeInTheDocument();
+    expect(within(card).getByText(/first 2 rounds excluded/i)).toBeInTheDocument();
+  });
+
   test("shows a tie when two teams end level on wins and point difference", async () => {
     const [teamA, teamB, teamC] = SESSION_TEAMS;
     const base = finishedSessionState();
@@ -382,17 +448,88 @@ describe("history flow", () => {
   });
 });
 
+describe("correcting a mistyped score", () => {
+  /** The rankings row for a player, as the user reads it. */
+  const rankingRow = (name: string) => screen.getByText(name).parentElement!.textContent;
+
+  async function editFirstMatch(scoreA: string, scoreB: string) {
+    saveState(finishedSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "History" }));
+
+    const before = { p1: rankingRow("P1"), p9: rankingRow("P9") };
+
+    await user.click(screen.getByRole("button", { name: "Edit Time A 25–19 Time B" }));
+    await user.clear(screen.getByLabelText("Score Time A"));
+    await user.type(screen.getByLabelText("Score Time A"), scoreA);
+    await user.clear(screen.getByLabelText("Score Time B"));
+    await user.type(screen.getByLabelText("Score Time B"), scoreB);
+    return { user, before };
+  }
+
+  test("a finished session's score can be corrected from history", async () => {
+    const { user } = await editFirstMatch("19", "25");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const card = screen.getByTestId("session-s1");
+    expect(within(card).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "Time A 19–25 Time B",
+      "Time C 20–25 Time A",
+      "Time B 25–23 Time C",
+    ]);
+  });
+
+  test("the correction re-rates later matches, not just the edited one", async () => {
+    const { user, before } = await editFirstMatch("19", "25");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(rankingRow("P1")).not.toBe(before.p1);
+    // Time C never played the edited match, but its later match against Time A
+    // was rated against the Elo that match produced.
+    expect(rankingRow("P9")).not.toBe(before.p9);
+  });
+
+  test("session standings follow the correction", async () => {
+    const { user } = await editFirstMatch("19", "25");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const card = screen.getByTestId("session-s1");
+    expect(within(card).getByTestId("session-stat-s1-0").textContent).toContain("1W");
+    expect(within(card).getByTestId("session-stat-s1-1").textContent).toContain("2W");
+  });
+
+  test("a tie cannot be saved", async () => {
+    const { user } = await editFirstMatch("20", "20");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByText("No ties in volleyball")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    const card = screen.getByTestId("session-s1");
+    expect(within(card).getByText("Time A 25–19 Time B")).toBeInTheDocument();
+  });
+
+  test("cancelling leaves the score alone", async () => {
+    const { user, before } = await editFirstMatch("19", "25");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const card = screen.getByTestId("session-s1");
+    expect(within(card).getByText("Time A 25–19 Time B")).toBeInTheDocument();
+    expect(rankingRow("P1")).toBe(before.p1);
+  });
+});
+
 const VARIED_ELOS = [1520, 1480, 1400, 1330, 1290, 1240, 1180, 1120, 1060, 1010, 960, 900];
 const ELO_BY_NAME = new Map(VARIED_ELOS.map((elo, i) => [`V${i + 1}`, elo]));
 
 function variedRosterState(): AppState {
   return {
-    version: 1,
+    version: 2,
     players: VARIED_ELOS.map((elo, i) => ({
       id: `v${i + 1}`,
       name: `V${i + 1}`,
       skill: 3,
-      elo,
+      baseElo: elo,
       active: true,
     })),
     sessions: [],

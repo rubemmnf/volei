@@ -5,7 +5,7 @@ import type { Session } from "../types";
 const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`);
 
 function makeSession(date: string, teams: [string[], string[], string[]]): Session {
-  return { id: `s-${date}`, date, teams, matches: [], finished: true };
+  return { id: `s-${date}`, date, teams, matches: [], finished: true, balancingRounds: 0 };
 }
 
 const TEAMS: [string[], string[], string[]] = [ids("a", 4), ids("b", 4), ids("c", 4)];
@@ -44,8 +44,6 @@ describe("buildFamiliarityMatrix", () => {
         sideB: ids("b", 4),
         scoreA: 25,
         scoreB: 20,
-        deltaA: 5,
-        deltaB: -5,
         timestamp: "2026-07-10T10:00:00.000Z",
       },
       {
@@ -54,8 +52,6 @@ describe("buildFamiliarityMatrix", () => {
         sideB: ids("c", 4),
         scoreA: 25,
         scoreB: 23,
-        deltaA: 4,
-        deltaB: -4,
         timestamp: "2026-07-10T10:30:00.000Z",
       },
     ];
@@ -73,8 +69,6 @@ describe("buildFamiliarityMatrix", () => {
         sideB: ids("c", 4),
         scoreA: 25,
         scoreB: 20,
-        deltaA: 5,
-        deltaB: -5,
         timestamp: "2026-07-10T10:00:00.000Z",
       },
     ];

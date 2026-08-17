@@ -1,25 +1,33 @@
 import { useState } from "react";
-import type { AppState, Match, Player, Session } from "../types";
+import type { AppState, Match, Player } from "../types";
 import { activeSession, type AppAction } from "../app-state";
 import { buildFamiliarityMatrix } from "../algorithm/familiarity";
-import { suggestSwap, type SwapSuggestion } from "../algorithm/suggest-swap";
-import { computeEloDeltas } from "../algorithm/elo";
+import { rankSwaps, type RankedSwap } from "../algorithm/suggest-swap";
+import { EditScoreModal } from "./EditScoreModal";
+import { MatchList } from "./MatchList";
 import { ScoreEntry } from "./ScoreEntry";
 import { SwapModal } from "./SwapModal";
 import { TEAM_META } from "./team-meta";
 
-type PendingSwap = SwapSuggestion & { teamA: number; teamB: number };
+type SwapContext = { teamA: number; teamB: number; suggestions: RankedSwap[] };
+
+function balancingHint(count: number): string {
+  if (count === 0) return "Every match counts toward tonight's winner.";
+  if (count === 1) return "The first match doesn't count toward tonight's winner.";
+  return `The first ${count} matches don't count toward tonight's winner.`;
+}
 
 type Props = {
   state: AppState;
+  players: Player[];
   dispatch: (action: AppAction) => void;
 };
 
-export function SessionScreen({ state, dispatch }: Props) {
+export function SessionScreen({ state, players, dispatch }: Props) {
   const [selected, setSelected] = useState<number[]>([]);
-  const [pendingSwap, setPendingSwap] = useState<PendingSwap | null>(null);
-  const [swapMessage, setSwapMessage] = useState<string | null>(null);
+  const [pendingSwap, setPendingSwap] = useState<SwapContext | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
 
   const session = activeSession(state);
   if (!session) {
@@ -30,7 +38,7 @@ export function SessionScreen({ state, dispatch }: Props) {
     );
   }
 
-  const playerById = new Map(state.players.map((p) => [p.id, p]));
+  const playerById = new Map(players.map((p) => [p.id, p]));
   const resolveTeam = (ids: string[]): Player[] => ids.map((id) => playerById.get(id)!);
 
   // A restored backup can contain an unfinished session whose player ids no longer
@@ -55,7 +63,6 @@ export function SessionScreen({ state, dispatch }: Props) {
   }
 
   const toggleTeam = (index: number) => {
-    setSwapMessage(null);
     setSelected((prev) =>
       prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index].slice(-2),
     );
@@ -63,33 +70,28 @@ export function SessionScreen({ state, dispatch }: Props) {
 
   const handleSave = (scoreA: number, scoreB: number) => {
     const [ia, ib] = selected;
-    const sideA = session.teams[ia];
-    const sideB = session.teams[ib];
-    const deltas = computeEloDeltas(resolveTeam(sideA), resolveTeam(sideB), scoreA, scoreB);
     dispatch({
       type: "record-match",
       match: {
         id: crypto.randomUUID(),
-        sideA,
-        sideB,
+        sideA: session.teams[ia],
+        sideB: session.teams[ib],
         scoreA,
         scoreB,
-        deltaA: deltas.deltaA,
-        deltaB: deltas.deltaB,
         timestamp: new Date().toISOString(),
       },
     });
   };
 
-  const handleSuggestSwap = () => {
+  const handleOpenSwap = () => {
     const [ia, ib] = selected;
     const matrix = buildFamiliarityMatrix(state.sessions, new Date());
-    const suggestion = suggestSwap(resolveTeam(session.teams[ia]), resolveTeam(session.teams[ib]), matrix);
-    if (!suggestion) {
-      setSwapMessage("Teams are already balanced.");
-      return;
-    }
-    setPendingSwap({ ...suggestion, teamA: ia, teamB: ib });
+    const suggestions = rankSwaps(
+      resolveTeam(session.teams[ia]),
+      resolveTeam(session.teams[ib]),
+      matrix,
+    );
+    setPendingSwap({ teamA: ia, teamB: ib, suggestions });
   };
 
   const bothSelected = selected.length === 2;
@@ -161,15 +163,50 @@ export function SessionScreen({ state, dispatch }: Props) {
       {bothSelected && (
         <button
           type="button"
-          onClick={handleSuggestSwap}
+          onClick={handleOpenSwap}
           className="w-full border border-amber-500/40 text-amber-400 font-bold py-3 rounded-xl"
         >
-          Suggest Swap
+          Swap Players
         </button>
       )}
-      {swapMessage && <p className="text-zinc-400 text-sm text-center">{swapMessage}</p>}
 
-      <MatchList session={session} playerById={playerById} />
+      <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 flex items-center gap-3">
+        <div className="flex-1">
+          <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+            Balancing Rounds
+          </p>
+          <p className="text-xs text-zinc-500 mt-1">{balancingHint(session.balancingRounds)}</p>
+        </div>
+        <button
+          type="button"
+          aria-label="Fewer balancing rounds"
+          disabled={session.balancingRounds === 0}
+          onClick={() =>
+            dispatch({ type: "set-balancing-rounds", count: session.balancingRounds - 1 })
+          }
+          className="w-10 h-10 rounded-xl border border-zinc-700 text-zinc-300 font-black disabled:opacity-30"
+        >
+          −
+        </button>
+        <span className="w-6 text-center font-black text-white">{session.balancingRounds}</span>
+        <button
+          type="button"
+          aria-label="More balancing rounds"
+          onClick={() =>
+            dispatch({ type: "set-balancing-rounds", count: session.balancingRounds + 1 })
+          }
+          className="w-10 h-10 rounded-xl border border-zinc-700 text-zinc-300 font-black"
+        >
+          +
+        </button>
+      </div>
+
+      <MatchList
+        session={session}
+        playerById={playerById}
+        title="Today's Matches"
+        onEditMatch={setEditingMatch}
+      />
 
       {session.matches.length > 0 && (
         <button
@@ -199,19 +236,39 @@ export function SessionScreen({ state, dispatch }: Props) {
         {confirmingEnd ? "Tap Again to End Session" : "End Session"}
       </button>
 
+      {editingMatch && (
+        <EditScoreModal
+          match={editingMatch}
+          session={session}
+          playerById={playerById}
+          onSave={(scoreA, scoreB) => {
+            dispatch({
+              type: "edit-match-score",
+              sessionId: session.id,
+              matchId: editingMatch.id,
+              scoreA,
+              scoreB,
+            });
+            setEditingMatch(null);
+          }}
+          onCancel={() => setEditingMatch(null)}
+        />
+      )}
+
       {pendingSwap && (
         <SwapModal
-          fromX={pendingSwap.fromX}
-          fromY={pendingSwap.fromY}
+          teamX={resolveTeam(session.teams[pendingSwap.teamA])}
+          teamY={resolveTeam(session.teams[pendingSwap.teamB])}
           teamXName={TEAM_META[pendingSwap.teamA].name}
           teamYName={TEAM_META[pendingSwap.teamB].name}
-          onApply={() => {
+          suggestions={pendingSwap.suggestions}
+          onApply={(playerA, playerB) => {
             dispatch({
               type: "apply-swap",
               teamA: pendingSwap.teamA,
-              playerA: pendingSwap.fromX.id,
+              playerA,
               teamB: pendingSwap.teamB,
-              playerB: pendingSwap.fromY.id,
+              playerB,
             });
             setPendingSwap(null);
           }}
@@ -222,32 +279,3 @@ export function SessionScreen({ state, dispatch }: Props) {
   );
 }
 
-function MatchList({ session, playerById }: { session: Session; playerById: Map<string, Player> }) {
-  if (session.matches.length === 0) return null;
-
-  return (
-    <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
-      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">
-        Today's Matches
-      </h3>
-      <ul className="flex flex-col gap-1">
-        {session.matches.map((match) => (
-          <li key={match.id} className="text-sm text-zinc-300">
-            {matchLabel(match, session, playerById)}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-export function matchLabel(match: Match, session: Session, playerById: Map<string, Player>): string {
-  const sideName = (side: string[]) => {
-    const index = session.teams.findIndex(
-      (team) => team.length === side.length && side.every((id) => team.includes(id)),
-    );
-    if (index >= 0) return TEAM_META[index].name;
-    return side.map((id) => playerById.get(id)?.name ?? "?").join("/");
-  };
-  return `${sideName(match.sideA)} ${match.scoreA}–${match.scoreB} ${sideName(match.sideB)}`;
-}

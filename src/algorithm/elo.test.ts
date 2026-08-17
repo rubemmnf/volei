@@ -3,7 +3,14 @@ import { computeEloDeltas, skillToElo } from "./elo";
 import type { Player } from "../types";
 
 function makeTeam(elos: number[]): Player[] {
-  return elos.map((elo, i) => ({ id: `p${elo}-${i}`, name: `P${i}`, skill: 5, elo, active: true }));
+  return elos.map((elo, i) => ({
+    id: `p${elo}-${i}`,
+    name: `P${i}`,
+    skill: 5,
+    baseElo: elo,
+    elo,
+    active: true,
+  }));
 }
 
 describe("skillToElo", () => {

@@ -15,11 +15,12 @@ type PendingExport = { model: ExportModel; filename: string };
 
 type Props = {
   state: AppState;
+  players: Player[];
   dispatch: (action: AppAction) => void;
   onSessionStarted: () => void;
 };
 
-export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
+export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Props) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pendingExport, setPendingExport] = useState<PendingExport | null>(null);
@@ -40,12 +41,12 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
     );
   }
 
-  const attending = state.players.filter((p) => p.active);
+  const attending = players.filter((p) => p.active);
   const canGenerate = attending.length === 12;
 
   // Preview can outlive the roster it was built from (Settings import / Delete All
   // Data replace state without unmounting this screen) — drop it if any id is gone.
-  const rosterIds = new Set(state.players.map((p) => p.id));
+  const rosterIds = new Set(players.map((p) => p.id));
   const validPreview =
     preview && preview.every((team) => team.every((p) => rosterIds.has(p.id)))
       ? preview
@@ -115,7 +116,7 @@ export function TeamsScreen({ state, dispatch, onSessionStarted }: Props) {
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {[...state.players]
+          {[...players]
             .sort((a, b) => a.name.localeCompare(b.name))
             .map((player) => (
               <button

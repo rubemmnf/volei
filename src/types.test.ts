@@ -1,11 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { AppStateSchema, MatchSchema, PlayerSchema, SessionSchema } from "./types";
+import { AppStateSchema, MatchSchema, SessionSchema, StoredPlayerSchema } from "./types";
 
 const validPlayer = {
   id: "p1",
   name: "John",
   skill: 4,
-  elo: 1200,
+  baseElo: 1200,
   active: true,
 };
 
@@ -17,8 +17,6 @@ const validMatch = {
   sideB: ids("b", 4),
   scoreA: 25,
   scoreB: 19,
-  deltaA: 12,
-  deltaB: -12,
   timestamp: "2026-07-10T10:00:00.000Z",
 };
 
@@ -28,23 +26,29 @@ const validSession = {
   teams: [ids("a", 4), ids("b", 4), ids("c", 4)],
   matches: [validMatch],
   finished: false,
+  balancingRounds: 0,
 };
 
-describe("PlayerSchema", () => {
+describe("StoredPlayerSchema", () => {
   test("accepts a valid player", () => {
-    expect(PlayerSchema.parse(validPlayer)).toEqual(validPlayer);
+    expect(StoredPlayerSchema.parse(validPlayer)).toEqual(validPlayer);
   });
 
   test("rejects skill below 1", () => {
-    expect(PlayerSchema.safeParse({ ...validPlayer, skill: 0 }).success).toBe(false);
+    expect(StoredPlayerSchema.safeParse({ ...validPlayer, skill: 0 }).success).toBe(false);
   });
 
   test("rejects skill above 5", () => {
-    expect(PlayerSchema.safeParse({ ...validPlayer, skill: 6 }).success).toBe(false);
+    expect(StoredPlayerSchema.safeParse({ ...validPlayer, skill: 6 }).success).toBe(false);
   });
 
   test("rejects empty name", () => {
-    expect(PlayerSchema.safeParse({ ...validPlayer, name: "" }).success).toBe(false);
+    expect(StoredPlayerSchema.safeParse({ ...validPlayer, name: "" }).success).toBe(false);
+  });
+
+  test("rejects a player without a baseElo seed", () => {
+    const { baseElo: _baseElo, ...withoutSeed } = validPlayer;
+    expect(StoredPlayerSchema.safeParse(withoutSeed).success).toBe(false);
   });
 });
 
@@ -64,6 +68,12 @@ describe("MatchSchema", () => {
   test("rejects a side without exactly 4 players", () => {
     expect(MatchSchema.safeParse({ ...validMatch, sideA: ids("a", 3) }).success).toBe(false);
   });
+
+  test("drops stored elo deltas — ratings are derived, not persisted", () => {
+    const parsed = MatchSchema.parse({ ...validMatch, deltaA: 12, deltaB: -12 });
+    expect(parsed).not.toHaveProperty("deltaA");
+    expect(parsed).not.toHaveProperty("deltaB");
+  });
 });
 
 describe("SessionSchema", () => {
@@ -80,16 +90,30 @@ describe("SessionSchema", () => {
     const invalid = { ...validSession, teams: [ids("a", 4), ids("b", 4), ids("c", 5)] };
     expect(SessionSchema.safeParse(invalid).success).toBe(false);
   });
+
+  test("defaults balancingRounds to 0 for sessions stored before the field existed", () => {
+    const { balancingRounds: _dropped, ...legacy } = validSession;
+    expect(SessionSchema.parse(legacy).balancingRounds).toBe(0);
+  });
+
+  test("rejects a negative balancing round count", () => {
+    expect(SessionSchema.safeParse({ ...validSession, balancingRounds: -1 }).success).toBe(false);
+  });
 });
 
 describe("AppStateSchema", () => {
   test("accepts a valid app state", () => {
-    const state = { version: 1, players: [validPlayer], sessions: [validSession] };
+    const state = { version: 2, players: [validPlayer], sessions: [validSession] };
     expect(AppStateSchema.parse(state)).toEqual(state);
   });
 
   test("rejects unknown version", () => {
-    const state = { version: 2, players: [], sessions: [] };
+    const state = { version: 99, players: [], sessions: [] };
+    expect(AppStateSchema.safeParse(state).success).toBe(false);
+  });
+
+  test("rejects the unmigrated v1 shape", () => {
+    const state = { version: 1, players: [], sessions: [] };
     expect(AppStateSchema.safeParse(state).success).toBe(false);
   });
 });

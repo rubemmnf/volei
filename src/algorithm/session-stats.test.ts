@@ -15,11 +15,15 @@ function match(
   scoreA: number,
   scoreB: number,
 ): Match {
-  return { id, sideA, sideB, scoreA, scoreB, deltaA: 0, deltaB: 0, timestamp: id };
+  return { id, sideA, sideB, scoreA, scoreB, timestamp: id };
 }
 
-function session(matches: Match[], teams: Session["teams"] = TEAMS): Session {
-  return { id: "s1", date: "2026-07-10", teams, matches, finished: true };
+function session(
+  matches: Match[],
+  teams: Session["teams"] = TEAMS,
+  balancingRounds = 0,
+): Session {
+  return { id: "s1", date: "2026-07-10", teams, matches, finished: true, balancingRounds };
 }
 
 describe("teamStats", () => {
@@ -79,6 +83,43 @@ describe("teamStats", () => {
     );
 
     expect(stats[0]).toEqual({ teamIndex: 0, wins: 1, pointDiff: 4 });
+  });
+
+  test("excludes the balancing rounds — only matches after the first N count", () => {
+    const stats = teamStats(
+      session(
+        [
+          match("m1", TEAMS[0], TEAMS[1], 25, 19),
+          match("m2", TEAMS[0], TEAMS[2], 25, 20),
+          match("m3", TEAMS[1], TEAMS[2], 25, 23),
+        ],
+        TEAMS,
+        2,
+      ),
+    );
+
+    expect(stats).toEqual([
+      { teamIndex: 0, wins: 0, pointDiff: 0 },
+      { teamIndex: 1, wins: 1, pointDiff: 2 },
+      { teamIndex: 2, wins: 0, pointDiff: 0 },
+    ]);
+  });
+
+  test("zero balancing rounds counts every match", () => {
+    const matches = [match("m1", TEAMS[0], TEAMS[1], 25, 19)];
+
+    expect(teamStats(session(matches, TEAMS, 0))).toEqual(teamStats(session(matches)));
+  });
+
+  test("more balancing rounds than matches leaves nothing to count", () => {
+    const stats = teamStats(session([match("m1", TEAMS[0], TEAMS[1], 25, 19)], TEAMS, 3));
+
+    expect(stats).toEqual([
+      { teamIndex: 0, wins: 0, pointDiff: 0 },
+      { teamIndex: 1, wins: 0, pointDiff: 0 },
+      { teamIndex: 2, wins: 0, pointDiff: 0 },
+    ]);
+    expect(sessionWinners(stats)).toEqual([]);
   });
 
   test("skips a match whose winning side has no majority overlap with any team", () => {

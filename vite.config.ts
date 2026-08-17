@@ -30,5 +30,8 @@ export default defineConfig({
     environment: "node",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
+    // The jsdom flow tests drive dozens of real userEvent interactions each and
+    // routinely pass 4s on a loaded machine — the 5s default made them flaky.
+    testTimeout: 20000,
   },
 });

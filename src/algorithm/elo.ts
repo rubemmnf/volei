@@ -1,4 +1,7 @@
-import { MAX_SKILL, MIN_SKILL, type Player } from "../types";
+import { MAX_SKILL, MIN_SKILL } from "../types";
+
+/** Anything carrying a rating — `Player`, or a raw record mid-migration. */
+export type Rated = { elo: number };
 
 const MIN_ELO = 800;
 const MAX_ELO = 1600;
@@ -12,7 +15,7 @@ export function skillToElo(skill: number): number {
 }
 
 /** Combined Elo of a team — the number the organizer balances on. */
-export function teamElo(team: Player[]): number {
+export function teamElo(team: Rated[]): number {
   return team.reduce((sum, p) => sum + p.elo, 0);
 }
 
@@ -24,8 +27,8 @@ export type EloDeltas = { deltaA: number; deltaB: number };
  * Every player on a side receives the same delta.
  */
 export function computeEloDeltas(
-  sideA: Player[],
-  sideB: Player[],
+  sideA: Rated[],
+  sideB: Rated[],
   scoreA: number,
   scoreB: number,
 ): EloDeltas {
@@ -43,6 +46,6 @@ export function computeEloDeltas(
   return { deltaA, deltaB: -deltaA };
 }
 
-function averageElo(team: Player[]): number {
+function averageElo(team: Rated[]): number {
   return teamElo(team) / team.length;
 }

@@ -1,15 +1,24 @@
-import type { AppState, Player, Session } from "../types";
+import { useState } from "react";
+import type { AppState, Match, Player, Session } from "../types";
+import type { AppAction } from "../app-state";
 import { sessionWinners, teamStats } from "../algorithm/session-stats";
-import { matchLabel } from "./SessionScreen";
+import { EditScoreModal } from "./EditScoreModal";
+import { MatchList } from "./MatchList";
 import { TEAM_META } from "./team-meta";
 
 type Props = {
   state: AppState;
+  players: Player[];
+  dispatch: (action: AppAction) => void;
 };
 
-export function HistoryScreen({ state }: Props) {
-  const playerById = new Map(state.players.map((p) => [p.id, p]));
-  const ranked = [...state.players].sort((a, b) => b.elo - a.elo);
+type Editing = { session: Session; match: Match };
+
+export function HistoryScreen({ state, players, dispatch }: Props) {
+  const [editing, setEditing] = useState<Editing | null>(null);
+
+  const playerById = new Map(players.map((p) => [p.id, p]));
+  const ranked = [...players].sort((a, b) => b.elo - a.elo);
   const finished = [...state.sessions].filter((s) => s.finished).reverse();
 
   return (
@@ -38,16 +47,33 @@ export function HistoryScreen({ state }: Props) {
               {session.matches.length} {session.matches.length === 1 ? "match" : "matches"}
             </span>
           </div>
-          <ul className="flex flex-col gap-1">
-            {session.matches.map((match) => (
-              <li key={match.id} className="text-sm text-zinc-300">
-                {matchLabel(match, session, playerById)}
-              </li>
-            ))}
-          </ul>
+          <MatchList
+            session={session}
+            playerById={playerById}
+            onEditMatch={(match) => setEditing({ session, match })}
+          />
           <SessionSummary session={session} />
         </div>
       ))}
+
+      {editing && (
+        <EditScoreModal
+          match={editing.match}
+          session={editing.session}
+          playerById={playerById}
+          onSave={(scoreA, scoreB) => {
+            dispatch({
+              type: "edit-match-score",
+              sessionId: editing.session.id,
+              matchId: editing.match.id,
+              scoreA,
+              scoreB,
+            });
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
@@ -78,6 +104,11 @@ function SessionSummary({ session }: { session: Session }) {
         </div>
       ))}
       <p className="text-white font-black text-sm mt-1">{winnerLabel}</p>
+      {session.balancingRounds > 0 && (
+        <p className="text-zinc-500 text-xs">
+          First {session.balancingRounds} rounds excluded
+        </p>
+      )}
     </div>
   );
 }

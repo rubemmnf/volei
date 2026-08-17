@@ -8,6 +8,15 @@ export type TeamStat = {
 };
 
 /**
+ * The matches that decide the night. The opening balancing rounds are dropped:
+ * they are real games everywhere else (ratings, history, familiarity), they just
+ * do not decide who won.
+ */
+export function countedMatches(session: Session): Match[] {
+  return session.matches.slice(session.balancingRounds);
+}
+
+/**
  * Per-team results of a session, in team order. Only won matches contribute:
  * a loss adds neither a win nor a negative margin.
  */
@@ -18,7 +27,7 @@ export function teamStats(session: Session): TeamStat[] {
     pointDiff: 0,
   }));
 
-  return session.matches.reduce<TeamStat[]>((stats, match) => {
+  return countedMatches(session).reduce<TeamStat[]>((stats, match) => {
     const index = teamIndexForSide(session.teams, winningSide(match));
     if (index < 0) return stats;
 
