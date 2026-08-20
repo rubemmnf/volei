@@ -4,6 +4,13 @@ import { teamElo } from "./elo";
 const TEAM_SIZE = 4;
 const DEFAULT_LIMIT = 3;
 
+/** Every pair of teams, in the order the organizer reads them. */
+export const TEAM_PAIRS: readonly (readonly [number, number])[] = [
+  [0, 1],
+  [0, 2],
+  [1, 2],
+];
+
 /**
  * A 1-for-1 swap between two teams, described by how much it disturbs them.
  * `shift` is how far each team total moves (in opposite directions);

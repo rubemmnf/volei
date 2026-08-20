@@ -4,14 +4,14 @@ import { activeSession, type AppAction } from "../app-state";
 import { teamElo } from "../algorithm/elo";
 import { buildFamiliarityMatrix } from "../algorithm/familiarity";
 import { generateTeams } from "../algorithm/generate-teams";
-import { buildExportModel, exportFilename, type ExportModel } from "../export/teams-image";
-import { ExportModal } from "./ExportModal";
+import { buildExportModel, buildSwapsExportModel, exportFilename } from "../export/teams-image";
+import { ExportModal, type ExportVariant } from "./ExportModal";
 import { SwapSuggestions } from "./SwapSuggestions";
 import { TEAM_META } from "./team-meta";
 
 type Preview = [Player[], Player[], Player[]];
 type Selection = { team: number; playerId: string };
-type PendingExport = { model: ExportModel; filename: string };
+type PendingExport = { teamsOnly: ExportVariant; withSwaps: ExportVariant };
 
 type Props = {
   state: AppState;
@@ -85,7 +85,13 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
   const handleExport = () => {
     if (!validPreview) return;
     const now = new Date();
-    setPendingExport({ model: buildExportModel(validPreview, now), filename: exportFilename(now) });
+    setPendingExport({
+      teamsOnly: { model: buildExportModel(validPreview, now), filename: exportFilename(now) },
+      withSwaps: {
+        model: buildSwapsExportModel(validPreview, now),
+        filename: exportFilename(now, true),
+      },
+    });
   };
 
   const handleStart = () => {
@@ -212,8 +218,8 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
 
       {validPreview && pendingExport && (
         <ExportModal
-          model={pendingExport.model}
-          filename={pendingExport.filename}
+          teamsOnly={pendingExport.teamsOnly}
+          withSwaps={pendingExport.withSwaps}
           onClose={() => setPendingExport(null)}
         />
       )}

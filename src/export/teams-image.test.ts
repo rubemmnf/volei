@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { buildExportModel } from "./teams-image";
+import { buildExportModel, buildSwapsExportModel, exportFilename } from "./teams-image";
+import { suggestBalancedSwaps } from "../algorithm/suggest-balanced-swaps";
 import type { Player } from "../types";
 
 function makePlayer(name: string, elo: number): Player {
@@ -57,5 +58,58 @@ describe("buildExportModel", () => {
     for (const team of model.teams) {
       expect(Object.keys(team).sort()).toEqual(["color", "name", "players"]);
     }
+  });
+});
+
+describe("buildSwapsExportModel", () => {
+  test("keeps everything the teams-only image has", () => {
+    const { swaps, ...rest } = buildSwapsExportModel(PREVIEW, DATE);
+
+    expect(rest).toEqual(buildExportModel(PREVIEW, DATE));
+    expect(swaps).toBeDefined();
+  });
+
+  test("carries every pair of teams, in reading order", () => {
+    const { swaps } = buildSwapsExportModel(PREVIEW, DATE);
+
+    expect(swaps!.map((pair) => [pair.x.name, pair.y.name])).toEqual([
+      ["Time A", "Time B"],
+      ["Time A", "Time C"],
+      ["Time B", "Time C"],
+    ]);
+  });
+
+  test("lists the same low-impact swaps the organizer sees on screen", () => {
+    const { swaps } = buildSwapsExportModel(PREVIEW, DATE);
+
+    expect(swaps![0].swaps).toEqual(
+      suggestBalancedSwaps(PREVIEW[0], PREVIEW[1]).map((swap) => ({
+        from: swap.fromX.name,
+        to: swap.fromY.name,
+        shift: swap.shift,
+      })),
+    );
+  });
+
+  test("carries no Elo — only how far a swap moves the totals", () => {
+    const serialized = JSON.stringify(buildSwapsExportModel(PREVIEW, DATE));
+
+    for (const player of PREVIEW.flat()) {
+      expect(serialized).not.toContain(String(player.elo));
+    }
+  });
+
+  test("leaves the teams-only model untouched", () => {
+    expect(buildExportModel(PREVIEW, DATE)).not.toHaveProperty("swaps");
+  });
+});
+
+describe("exportFilename", () => {
+  test("names the teams-only image after the date", () => {
+    expect(exportFilename(DATE)).toBe("times-10-08.png");
+  });
+
+  test("marks the variant that includes the swaps", () => {
+    expect(exportFilename(DATE, true)).toBe("times-trocas-10-08.png");
   });
 });

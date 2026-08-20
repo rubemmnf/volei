@@ -1,12 +1,6 @@
 import type { Player } from "../types";
-import { suggestBalancedSwaps } from "../algorithm/suggest-balanced-swaps";
+import { suggestBalancedSwaps, TEAM_PAIRS } from "../algorithm/suggest-balanced-swaps";
 import { TEAM_META } from "./team-meta";
-
-const PAIRS: readonly (readonly [number, number])[] = [
-  [0, 1],
-  [0, 2],
-  [1, 2],
-];
 
 export type SwapTarget = { team: number; playerId: string };
 
@@ -31,7 +25,7 @@ export function SwapSuggestions({ preview, onSwap }: Props) {
         </p>
       </div>
 
-      {PAIRS.map(([x, y]) => (
+      {TEAM_PAIRS.map(([x, y]) => (
         <div key={`${x}-${y}`} data-testid={`swaps-${x}-${y}`}>
           <p className="text-xs font-bold mb-2">
             <span className={TEAM_META[x].text}>{TEAM_META[x].name}</span>
