@@ -104,17 +104,19 @@ function SuggestionList({
   onPick: (index: number) => void;
 }) {
   if (suggestions.length === 0) {
-    return (
-      <p className="text-zinc-400 text-sm mb-4">
-        Teams are already balanced. Choose manually to trade anyway.
-      </p>
-    );
+    return <p className="text-zinc-400 text-sm mb-4">Choose manually to trade anyway.</p>;
   }
+
+  // Never "already balanced": the list is ranked on ratings plus tonight's results, so
+  // a team being run over still gets options even when no swap closes the gap outright.
+  const anyImproves = suggestions.some((swap) => swap.improves);
 
   return (
     <>
       <p className="text-zinc-400 text-sm mb-4">
-        Closest ratings first. Pick one, or choose your own.
+        {anyImproves
+          ? "Closest ratings first. Pick one, or choose your own."
+          : "No swap evens these teams out — these are the least uneven."}
       </p>
       <ul className="flex flex-col gap-2 mb-2">
         {suggestions.map((swap, i) => (
@@ -136,8 +138,9 @@ function SuggestionList({
                   {swap.fromX.name} ⇄ {swap.fromY.name}
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-bold text-zinc-500">
-                gap {Math.round(swap.gapAfter)}
+              <span className="shrink-0 text-right text-xs font-bold text-zinc-500">
+                <span className="block">gap {Math.round(swap.gapAfter)}</span>
+                {!swap.improves && <span className="block text-zinc-600">no gain</span>}
               </span>
             </button>
           </li>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { AppState, Match, Player } from "../types";
 import { activeSession, type AppAction } from "../app-state";
 import { buildFamiliarityMatrix } from "../algorithm/familiarity";
+import { formBias, lopsidedPairing, teamForm, type TeamForm } from "../algorithm/session-stats";
 import { rankSwaps, type RankedSwap } from "../algorithm/suggest-swap";
 import { EditScoreModal } from "./EditScoreModal";
 import { MatchList } from "./MatchList";
@@ -83,17 +84,28 @@ export function SessionScreen({ state, players, dispatch }: Props) {
     });
   };
 
-  const handleOpenSwap = () => {
-    const [ia, ib] = selected;
+  // Ratings alone cannot see a team running away with the night: a win moves every
+  // player on a side by the same amount, so it never changes who outrates whom.
+  // Tonight's record is folded in as an Elo-sum bias instead.
+  const form = teamForm(session);
+
+  const openSwapFor = (ia: number, ib: number) => {
     const matrix = buildFamiliarityMatrix(state.sessions, new Date());
     const suggestions = rankSwaps(
       resolveTeam(session.teams[ia]),
       resolveTeam(session.teams[ib]),
       matrix,
+      { biasX: formBias(form[ia]), biasY: formBias(form[ib]) },
     );
     setPendingSwap({ teamA: ia, teamB: ib, suggestions });
   };
 
+  const openLopsidedSwap = (leader: number, trailer: number) => {
+    setSelected([leader, trailer]);
+    openSwapFor(leader, trailer);
+  };
+
+  const lopsided = lopsidedPairing(session);
   const bothSelected = selected.length === 2;
 
   return (
@@ -101,6 +113,16 @@ export function SessionScreen({ state, players, dispatch }: Props) {
       <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
         Session · {session.date}
       </h2>
+
+      {lopsided && (
+        <LopsidedBanner
+          leaderName={TEAM_META[lopsided.leader].name}
+          trailerName={TEAM_META[lopsided.trailer].name}
+          leaderRecord={record(form[lopsided.leader])}
+          trailerRecord={record(form[lopsided.trailer])}
+          onRebalance={() => openLopsidedSwap(lopsided.leader, lopsided.trailer)}
+        />
+      )}
 
       <p className="text-zinc-500 text-xs">Tap the two teams about to play.</p>
       <div className="flex flex-col gap-3">
@@ -163,7 +185,7 @@ export function SessionScreen({ state, players, dispatch }: Props) {
       {bothSelected && (
         <button
           type="button"
-          onClick={handleOpenSwap}
+          onClick={() => openSwapFor(selected[0], selected[1])}
           className="w-full border border-amber-500/40 text-amber-400 font-bold py-3 rounded-xl"
         >
           Swap Players
@@ -279,3 +301,39 @@ export function SessionScreen({ state, players, dispatch }: Props) {
   );
 }
 
+function record(form: TeamForm): string {
+  return `${form.wins}-${form.losses}`;
+}
+
+type LopsidedBannerProps = {
+  leaderName: string;
+  trailerName: string;
+  leaderRecord: string;
+  trailerRecord: string;
+  onRebalance: () => void;
+};
+
+function LopsidedBanner({
+  leaderName,
+  trailerName,
+  leaderRecord,
+  trailerRecord,
+  onRebalance,
+}: LopsidedBannerProps) {
+  return (
+    <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex flex-col gap-3">
+      <p className="text-sm text-amber-100">
+        <span className="font-black">{leaderName}</span> is running the night at {leaderRecord}
+        {" while "}
+        <span className="font-black">{trailerName}</span> sits at {trailerRecord}.
+      </p>
+      <button
+        type="button"
+        onClick={onRebalance}
+        className="w-full bg-amber-500 text-black font-black py-3 rounded-xl"
+      >
+        Rebalance {leaderName} ⇄ {trailerName}
+      </button>
+    </div>
+  );
+}

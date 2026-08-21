@@ -24,10 +24,13 @@ const TEAM_Y = [
 ];
 
 const SUGGESTIONS: RankedSwap[] = [
-  { fromX: TEAM_X[0], fromY: TEAM_Y[0], gapAfter: 200, familiarityAfter: 0 },
-  { fromX: TEAM_X[1], fromY: TEAM_Y[1], gapAfter: 400, familiarityAfter: 0 },
-  { fromX: TEAM_X[2], fromY: TEAM_Y[2], gapAfter: 400, familiarityAfter: 0 },
+  { fromX: TEAM_X[0], fromY: TEAM_Y[0], gapAfter: 200, familiarityAfter: 0, improves: true },
+  { fromX: TEAM_X[1], fromY: TEAM_Y[1], gapAfter: 400, familiarityAfter: 0, improves: true },
+  { fromX: TEAM_X[2], fromY: TEAM_Y[2], gapAfter: 400, familiarityAfter: 0, improves: false },
 ];
+
+/** What a pair of teams no 1-for-1 swap can even out looks like. */
+const NO_GAIN: RankedSwap[] = SUGGESTIONS.map((swap) => ({ ...swap, improves: false }));
 
 function setup(suggestions: RankedSwap[] = SUGGESTIONS) {
   const onApply = vi.fn();
@@ -67,10 +70,23 @@ describe("SwapModal suggestions", () => {
     expect(onApply).toHaveBeenCalledWith("x3", "y3");
   });
 
-  test("says so when no swap would improve the balance", () => {
-    setup([]);
-    expect(screen.getByText(/already balanced/i)).toBeInTheDocument();
-    expect(applyButton()).toBeDisabled();
+  test("marks the swaps that would not actually help", () => {
+    setup();
+    const rows = screen.getAllByRole("button", { name: /^swap .* with .*/i });
+    expect(rows[2]).toHaveTextContent(/no gain/i);
+    expect(rows[0]).not.toHaveTextContent(/no gain/i);
+  });
+
+  test("still offers the least uneven swaps when none of them improve", () => {
+    setup(NO_GAIN);
+    expect(screen.getAllByRole("button", { name: /^swap .* with .*/i })).toHaveLength(3);
+    expect(screen.getByText(/least uneven/i)).toBeInTheDocument();
+    expect(applyButton()).toBeEnabled();
+  });
+
+  test("never claims the teams are balanced when a team is being run over", () => {
+    setup(NO_GAIN);
+    expect(screen.queryByText(/already balanced/i)).not.toBeInTheDocument();
   });
 
   test("cancels without applying", async () => {

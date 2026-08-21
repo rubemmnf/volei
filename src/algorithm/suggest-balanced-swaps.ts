@@ -29,7 +29,7 @@ export type BalancedSwap = {
  * resulting gap — for moving a player for social reasons without undoing
  * the balance the generator found.
  *
- * Note this is a different objective from `suggestSwap`, which hunts for the
+ * Note this is a different objective from `rankSwaps`, which hunts for the
  * swap that most evens out already-lopsided teams.
  */
 export function suggestBalancedSwaps(
