@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import type { Match, Player, Session } from "../types";
-import { sideName } from "./MatchList";
+import { sideName } from "./match-label";
 
 type Props = {
   match: Match;

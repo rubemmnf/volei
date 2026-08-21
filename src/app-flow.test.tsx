@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import App from "./App";
 import { saveState } from "./storage";
 import { renderTeamsImage } from "./export/teams-image";
+import { renderResultsImage } from "./export/results-image";
 import type { AppState, Match } from "./types";
 
 // jsdom has no canvas backend — keep the painter out of the component tests and
@@ -12,8 +13,17 @@ import type { AppState, Match } from "./types";
 vi.mock("./export/teams-image", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./export/teams-image")>()),
   renderTeamsImage: vi.fn(() => Promise.resolve(new Blob(["png"], { type: "image/png" }))),
-  shareTeamsImage: vi.fn(() => Promise.resolve()),
-  downloadTeamsImage: vi.fn(),
+}));
+
+vi.mock("./export/results-image", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./export/results-image")>()),
+  renderResultsImage: vi.fn(() => Promise.resolve(new Blob(["png"], { type: "image/png" }))),
+}));
+
+// Sharing and downloading touch APIs jsdom does not implement.
+vi.mock("./export/share", () => ({
+  shareImage: vi.fn(() => Promise.resolve()),
+  downloadImage: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -248,7 +258,7 @@ describe("session flow", () => {
     await selectTeamsAB(user);
     await user.click(screen.getByRole("button", { name: /swap players/i }));
 
-    expect(screen.getByText(/already balanced/i)).toBeInTheDocument();
+    expect(screen.getByText(/least uneven/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /choose manually/i }));
     await user.click(screen.getByRole("button", { name: "P1" }));
     await user.click(screen.getByRole("button", { name: "P5" }));
@@ -257,6 +267,64 @@ describe("session flow", () => {
     expect(screen.getByRole("button", { name: /^Time A/ })).toHaveTextContent(/\bP5\b/);
     expect(screen.getByRole("button", { name: /^Time A/ })).not.toHaveTextContent(/\bP1\b/);
     expect(screen.getByRole("button", { name: /^Time B/ })).toHaveTextContent(/\bP1\b/);
+  });
+
+  // The night that prompted the feature: three balancing rounds leave Time A at 2-0
+  // and Time B at 0-2, and the organizer wants to be told, not to have to ask.
+  function lopsidedSessionState(): AppState {
+    const [teamA, teamB, teamC] = SESSION_TEAMS;
+    return {
+      ...twelvePlayersState(),
+      sessions: [
+        {
+          id: "s1",
+          date: "2026-07-10",
+          teams: SESSION_TEAMS,
+          matches: [
+            playedMatch("m1", teamA, teamB, 25, 23),
+            playedMatch("m2", teamA, teamC, 25, 23),
+            playedMatch("m3", teamC, teamB, 25, 23),
+          ],
+          finished: false,
+          balancingRounds: 3,
+        },
+      ],
+    };
+  }
+
+  const rebalanceButton = () => screen.queryByRole("button", { name: /rebalance/i });
+
+  test("flags the team running away with the night", async () => {
+    saveState(lopsidedSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+
+    const banner = rebalanceButton();
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveAccessibleName(/Time A/);
+    expect(banner).toHaveAccessibleName(/Time B/);
+  });
+
+  test("stays quiet while the night is even", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+    expect(rebalanceButton()).not.toBeInTheDocument();
+  });
+
+  test("the banner opens a swap on that pairing with something to offer", async () => {
+    saveState(lopsidedSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+    await user.click(rebalanceButton()!);
+
+    const rows = screen.getAllByRole("button", { name: /^swap .* with .*/i });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]).toHaveTextContent(/Time A/);
+    expect(rows[0]).toHaveTextContent(/Time B/);
   });
 
   test("save stays disabled on a tied score", async () => {
@@ -604,6 +672,54 @@ describe("teams export", () => {
     await user.click(screen.getByRole("button", { name: /exportar imagem/i }));
 
     expect(await screen.findByAltText(/^Times ·/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /compartilhar/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /baixar/i })).toBeInTheDocument();
+  });
+});
+
+describe("session results export", () => {
+  async function openHistory() {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "History" }));
+    return user;
+  }
+
+  test("offers the export on every finished session", async () => {
+    saveState(finishedSessionState());
+    await openHistory();
+
+    expect(
+      within(screen.getByTestId("session-s1")).getByRole("button", {
+        name: /exportar resultado/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("hands the painter the champion, the standings and every score", async () => {
+    saveState(finishedSessionState());
+    const user = await openHistory();
+    await user.click(screen.getByRole("button", { name: /exportar resultado/i }));
+
+    expect(renderResultsImage).toHaveBeenCalledTimes(1);
+    const model = vi.mocked(renderResultsImage).mock.calls[0][0];
+
+    expect(model.championLabel).toBe("CAMPEÃO");
+    expect(model.champions.map((c) => c.name)).toEqual(["Time A"]);
+    expect(model.standings.map((row) => row.name)).toEqual(["Time A", "Time B", "Time C"]);
+    expect(model.matches.map((m) => m.label)).toEqual([
+      "Time A 25–19 Time B",
+      "Time C 20–25 Time A",
+      "Time B 25–23 Time C",
+    ]);
+  });
+
+  test("previews the image before anything is shared", async () => {
+    saveState(finishedSessionState());
+    const user = await openHistory();
+    await user.click(screen.getByRole("button", { name: /exportar resultado/i }));
+
+    expect(await screen.findByAltText("Resultado · 10/07")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /compartilhar/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /baixar/i })).toBeInTheDocument();
   });

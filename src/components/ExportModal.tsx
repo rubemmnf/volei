@@ -1,36 +1,34 @@
 import { useEffect, useState } from "react";
-import {
-  downloadTeamsImage,
-  renderTeamsImage,
-  shareTeamsImage,
-  type ExportModel,
-} from "../export/teams-image";
+import { downloadImage, shareImage } from "../export/share";
 
-export type ExportVariant = { model: ExportModel; filename: string };
+/** One image the organizer can send to the group. */
+export type ExportTab = {
+  key: string;
+  label: string;
+  hint: string;
+  /** Alt text for the preview — the image's own title reads best here. */
+  alt: string;
+  filename: string;
+  render: () => Promise<Blob>;
+};
 
 type Props = {
-  teamsOnly: ExportVariant;
-  withSwaps: ExportVariant;
+  tabs: ExportTab[];
   onClose: () => void;
 };
 
-const TABS = [
-  { key: "teams", label: "Só os times", hint: "Só os times e os nomes — sem pontuação e sem sugestões." },
-  { key: "swaps", label: "Times + trocas", hint: "Os times mais as trocas de baixo impacto, para o grupo pedir troca antes do jogo." },
-] as const;
-
 /**
  * Shows the PNG that would be sent to the group before anything leaves the
- * device. Both variants are painted from a model that carries names only —
- * the "trocas" one adds the ±shift numbers, never the Elo behind them.
+ * device. Every tab is painted from a model that carries names and scores only,
+ * never the Elo behind them. A single tab hides the switcher.
  */
-export function ExportModal({ teamsOnly, withSwaps, onClose }: Props) {
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("teams");
+export function ExportModal({ tabs, onClose }: Props) {
+  const [key, setKey] = useState(tabs[0].key);
   const [image, setImage] = useState<{ blob: Blob; url: string } | null>(null);
   const [failed, setFailed] = useState(false);
 
-  const variant = tab === "teams" ? teamsOnly : withSwaps;
-  const { model, filename } = variant;
+  const tab = tabs.find((option) => option.key === key) ?? tabs[0];
+  const { render, filename } = tab;
 
   useEffect(() => {
     let url: string | null = null;
@@ -39,7 +37,7 @@ export function ExportModal({ teamsOnly, withSwaps, onClose }: Props) {
     setImage(null);
     setFailed(false);
 
-    renderTeamsImage(model)
+    render()
       .then((blob) => {
         if (cancelled) return;
         url = URL.createObjectURL(blob);
@@ -53,40 +51,43 @@ export function ExportModal({ teamsOnly, withSwaps, onClose }: Props) {
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [model]);
+    // The key identifies which image to paint. `render` is a fresh closure on
+    // every parent render, so depending on it would repaint forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab.key]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4 max-h-full overflow-y-auto">
         <div>
           <h3 className="text-xl font-black text-white">Exportar imagem</h3>
-          <p className="text-zinc-400 text-sm mt-1">
-            {TABS.find((t) => t.key === tab)!.hint}
-          </p>
+          <p className="text-zinc-400 text-sm mt-1">{tab.hint}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-1 bg-black p-1 rounded-xl border border-zinc-800">
-          {TABS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              aria-pressed={tab === option.key}
-              onClick={() => setTab(option.key)}
-              className={`py-2 rounded-lg text-sm font-bold transition-colors ${
-                tab === option.key ? "bg-zinc-800 text-white" : "text-zinc-500"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        {tabs.length > 1 && (
+          <div className="grid grid-cols-2 gap-1 bg-black p-1 rounded-xl border border-zinc-800">
+            {tabs.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={option.key === tab.key}
+                onClick={() => setKey(option.key)}
+                className={`py-2 rounded-lg text-sm font-bold transition-colors ${
+                  option.key === tab.key ? "bg-zinc-800 text-white" : "text-zinc-500"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {failed && <p className="text-red-400 text-sm">Não foi possível gerar a imagem.</p>}
         {!failed && !image && <p className="text-zinc-500 text-sm">Gerando…</p>}
         {image && (
           <img
             src={image.url}
-            alt={model.title}
+            alt={tab.alt}
             className="w-full max-h-[55vh] object-contain rounded-2xl border border-zinc-800"
           />
         )}
@@ -102,7 +103,7 @@ export function ExportModal({ teamsOnly, withSwaps, onClose }: Props) {
           <button
             type="button"
             disabled={!image}
-            onClick={() => image && downloadTeamsImage(image.blob, filename)}
+            onClick={() => image && downloadImage(image.blob, filename)}
             className="flex-1 border border-zinc-700 text-white font-bold py-3 rounded-xl disabled:opacity-30"
           >
             Baixar
@@ -110,7 +111,7 @@ export function ExportModal({ teamsOnly, withSwaps, onClose }: Props) {
           <button
             type="button"
             disabled={!image}
-            onClick={() => image && shareTeamsImage(image.blob, filename)}
+            onClick={() => image && shareImage(image.blob, filename)}
             className="flex-1 bg-emerald-500 text-black font-black py-3 rounded-xl disabled:opacity-30"
           >
             Compartilhar

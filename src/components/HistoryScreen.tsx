@@ -2,7 +2,9 @@ import { useState } from "react";
 import type { AppState, Match, Player, Session } from "../types";
 import type { AppAction } from "../app-state";
 import { sessionWinners, teamStats } from "../algorithm/session-stats";
+import { buildResultsExportModel, renderResultsImage, resultsFilename } from "../export/results-image";
 import { EditScoreModal } from "./EditScoreModal";
+import { ExportModal } from "./ExportModal";
 import { MatchList } from "./MatchList";
 import { TEAM_META } from "./team-meta";
 
@@ -16,6 +18,7 @@ type Editing = { session: Session; match: Match };
 
 export function HistoryScreen({ state, players, dispatch }: Props) {
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [exporting, setExporting] = useState<Session | null>(null);
 
   const playerById = new Map(players.map((p) => [p.id, p]));
   const ranked = [...players].sort((a, b) => b.elo - a.elo);
@@ -53,8 +56,22 @@ export function HistoryScreen({ state, players, dispatch }: Props) {
             onEditMatch={(match) => setEditing({ session, match })}
           />
           <SessionSummary session={session} />
+          <button
+            type="button"
+            onClick={() => setExporting(session)}
+            className="w-full mt-3 border border-zinc-700 text-white font-bold py-3 rounded-xl"
+          >
+            Exportar resultado
+          </button>
         </div>
       ))}
+
+      {exporting && (
+        <ExportModal
+          tabs={[resultsTab(exporting, players)]}
+          onClose={() => setExporting(null)}
+        />
+      )}
 
       {editing && (
         <EditScoreModal
@@ -76,6 +93,19 @@ export function HistoryScreen({ state, players, dispatch }: Props) {
       )}
     </div>
   );
+}
+
+/** The one image a finished session exports: who won the night, in Portuguese. */
+function resultsTab(session: Session, players: Player[]) {
+  const model = buildResultsExportModel(session, players);
+  return {
+    key: `resultado-${session.id}`,
+    label: "Resultado",
+    hint: "Campeão, classificação, placares e estatísticas da sessão — pronto para o grupo.",
+    alt: model.title,
+    filename: resultsFilename(session),
+    render: () => renderResultsImage(model),
+  };
 }
 
 function SessionSummary({ session }: { session: Session }) {

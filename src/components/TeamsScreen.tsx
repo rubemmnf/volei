@@ -4,14 +4,19 @@ import { activeSession, type AppAction } from "../app-state";
 import { teamElo } from "../algorithm/elo";
 import { buildFamiliarityMatrix } from "../algorithm/familiarity";
 import { generateTeams } from "../algorithm/generate-teams";
-import { buildExportModel, buildSwapsExportModel, exportFilename } from "../export/teams-image";
-import { ExportModal, type ExportVariant } from "./ExportModal";
+import {
+  buildExportModel,
+  buildSwapsExportModel,
+  exportFilename,
+  renderTeamsImage,
+} from "../export/teams-image";
+import { ExportModal, type ExportTab } from "./ExportModal";
 import { SwapSuggestions } from "./SwapSuggestions";
 import { TEAM_META } from "./team-meta";
 
 type Preview = [Player[], Player[], Player[]];
 type Selection = { team: number; playerId: string };
-type PendingExport = { teamsOnly: ExportVariant; withSwaps: ExportVariant };
+type PendingExport = ExportTab[];
 
 type Props = {
   state: AppState;
@@ -85,13 +90,27 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
   const handleExport = () => {
     if (!validPreview) return;
     const now = new Date();
-    setPendingExport({
-      teamsOnly: { model: buildExportModel(validPreview, now), filename: exportFilename(now) },
-      withSwaps: {
-        model: buildSwapsExportModel(validPreview, now),
-        filename: exportFilename(now, true),
+    const teamsOnly = buildExportModel(validPreview, now);
+    const withSwaps = buildSwapsExportModel(validPreview, now);
+
+    setPendingExport([
+      {
+        key: "teams",
+        label: "Só os times",
+        hint: "Só os times e os nomes — sem pontuação e sem sugestões.",
+        alt: teamsOnly.title,
+        filename: exportFilename(now),
+        render: () => renderTeamsImage(teamsOnly),
       },
-    });
+      {
+        key: "swaps",
+        label: "Times + trocas",
+        hint: "Os times mais as trocas de baixo impacto, para o grupo pedir troca antes do jogo.",
+        alt: withSwaps.title,
+        filename: exportFilename(now, true),
+        render: () => renderTeamsImage(withSwaps),
+      },
+    ]);
   };
 
   const handleStart = () => {
@@ -218,8 +237,7 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
 
       {validPreview && pendingExport && (
         <ExportModal
-          teamsOnly={pendingExport.teamsOnly}
-          withSwaps={pendingExport.withSwaps}
+          tabs={pendingExport}
           onClose={() => setPendingExport(null)}
         />
       )}

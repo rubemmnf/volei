@@ -1,6 +1,23 @@
 import type { Player } from "../types";
 import { TEAM_META } from "../components/team-meta";
 import { suggestBalancedSwaps, TEAM_PAIRS } from "../algorithm/suggest-balanced-swaps";
+import {
+  CARD_FILL,
+  createCanvas,
+  FAINT_COLOR,
+  FONT_STACK,
+  MARGIN,
+  MUTED_COLOR,
+  PAD,
+  PILL_FILL,
+  PILL_STROKE,
+  PLAYER_COLOR,
+  roundedRect,
+  TITLE_COLOR,
+  toPngBlob,
+  truncate,
+  WIDTH,
+} from "./canvas";
 
 /** One suggested trade, as it appears in the image. */
 export type ExportSwap = { from: string; to: string; shift: number };
@@ -24,15 +41,11 @@ export type ExportModel = {
   swaps?: ExportSwapPair[];
 };
 
-const WIDTH = 1080;
 const TEAMS_ONLY_HEIGHT = 1350;
-const MARGIN = 72;
 const CARD_HEIGHT = 340;
 const CARD_GAP = 36;
 const CARDS_TOP = 184;
-const PAD = 48;
 const PILL_HEIGHT = 68;
-const FONT_STACK = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 const SWAPS_GAP = 48;
 const SWAPS_PAD = 40;
@@ -41,15 +54,6 @@ const PAIR_HEADER_HEIGHT = 46;
 const SWAP_ROW_HEIGHT = 62;
 const SWAP_ROW_GAP = 12;
 const PAIR_GAP = 30;
-
-const BACKGROUND = "#000000";
-const CARD_FILL = "#18181b";
-const PILL_FILL = "#000000";
-const PILL_STROKE = "rgba(255,255,255,0.10)";
-const TITLE_COLOR = "#ffffff";
-const PLAYER_COLOR = "#e4e4e7";
-const MUTED_COLOR = "#a1a1aa";
-const FAINT_COLOR = "#71717a";
 
 export function buildExportModel(preview: Player[][], date: Date): ExportModel {
   const day = String(date.getDate()).padStart(2, "0");
@@ -93,15 +97,7 @@ export function exportFilename(date: Date, withSwaps = false): string {
 
 /** Paints the model onto an offscreen canvas and hands back a PNG blob. */
 export function renderTeamsImage(model: ExportModel): Promise<Blob> {
-  const canvas = document.createElement("canvas");
-  canvas.width = WIDTH;
-  canvas.height = imageHeight(model);
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D context unavailable");
-
-  ctx.fillStyle = BACKGROUND;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const { canvas, ctx } = createCanvas(imageHeight(model));
 
   ctx.fillStyle = TITLE_COLOR;
   ctx.font = `800 56px ${FONT_STACK}`;
@@ -117,12 +113,7 @@ export function renderTeamsImage(model: ExportModel): Promise<Blob> {
     drawSwapsCard(ctx, model.swaps, cardsBottom(model) + SWAPS_GAP);
   }
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("Could not encode the image"))),
-      "image/png",
-    );
-  });
+  return toPngBlob(canvas);
 }
 
 function cardsBottom(model: ExportModel): number {
@@ -239,57 +230,4 @@ function drawSwapPair(
     ctx.fillText(`±${swap.shift}`, left + rowWidth - 20, y + 41);
     ctx.textAlign = "left";
   });
-}
-
-function roundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + width, y, x + width, y + height, radius);
-  ctx.arcTo(x + width, y + height, x, y + height, radius);
-  ctx.arcTo(x, y + height, x, y, radius);
-  ctx.arcTo(x, y, x + width, y, radius);
-  ctx.closePath();
-}
-
-function truncate(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-
-  let cut = text;
-  while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) {
-    cut = cut.slice(0, -1);
-  }
-  return `${cut}…`;
-}
-
-/** Hands the PNG to the OS share sheet, falling back to a download. */
-export async function shareTeamsImage(blob: Blob, filename: string): Promise<void> {
-  const file = new File([blob], filename, { type: "image/png" });
-
-  if (navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file] });
-      return;
-    } catch (error) {
-      // The user dismissing the share sheet is not a failure worth reporting.
-      if (error instanceof Error && error.name === "AbortError") return;
-    }
-  }
-
-  downloadTeamsImage(blob, filename);
-}
-
-export function downloadTeamsImage(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
 }
