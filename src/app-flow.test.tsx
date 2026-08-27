@@ -24,6 +24,7 @@ vi.mock("./export/results-image", async (importOriginal) => ({
 vi.mock("./export/share", () => ({
   shareImage: vi.fn(() => Promise.resolve()),
   downloadImage: vi.fn(),
+  canShareImage: vi.fn(() => true),
 }));
 
 beforeEach(() => {
@@ -673,7 +674,7 @@ describe("teams export", () => {
 
     expect(await screen.findByAltText(/^Times ·/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /compartilhar/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /baixar/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /baixar/i })).not.toBeInTheDocument();
   });
 });
 
@@ -721,6 +722,6 @@ describe("session results export", () => {
 
     expect(await screen.findByAltText("Resultado · 10/07")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /compartilhar/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /baixar/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /baixar/i })).not.toBeInTheDocument();
   });
 });

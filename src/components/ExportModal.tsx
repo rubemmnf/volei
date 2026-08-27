@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { downloadImage, shareImage } from "../export/share";
+import { canShareImage, shareImage } from "../export/share";
 
 /** One image the organizer can send to the group. */
 export type ExportTab = {
@@ -29,6 +29,10 @@ export function ExportModal({ tabs, onClose }: Props) {
 
   const tab = tabs.find((option) => option.key === key) ?? tabs[0];
   const { render, filename } = tab;
+
+  // One action, not two: sharing already falls back to a download on its own,
+  // so a separate download button would only cost the organizer a click.
+  const canShare = canShareImage();
 
   useEffect(() => {
     let url: string | null = null;
@@ -103,18 +107,10 @@ export function ExportModal({ tabs, onClose }: Props) {
           <button
             type="button"
             disabled={!image}
-            onClick={() => image && downloadImage(image.blob, filename)}
-            className="flex-1 border border-zinc-700 text-white font-bold py-3 rounded-xl disabled:opacity-30"
-          >
-            Baixar
-          </button>
-          <button
-            type="button"
-            disabled={!image}
             onClick={() => image && shareImage(image.blob, filename)}
             className="flex-1 bg-emerald-500 text-black font-black py-3 rounded-xl disabled:opacity-30"
           >
-            Compartilhar
+            {canShare ? "Compartilhar" : "Baixar"}
           </button>
         </div>
       </div>

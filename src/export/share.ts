@@ -1,3 +1,12 @@
+/**
+ * Whether the OS share sheet accepts a PNG here. Desktop browsers without it
+ * only ever get the download, so the button says so up front.
+ */
+export function canShareImage(): boolean {
+  const probe = new File([], "probe.png", { type: "image/png" });
+  return navigator.canShare?.({ files: [probe] }) ?? false;
+}
+
 /** Hands the PNG to the OS share sheet, falling back to a download. */
 export async function shareImage(blob: Blob, filename: string): Promise<void> {
   const file = new File([blob], filename, { type: "image/png" });
