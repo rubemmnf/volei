@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { buildExportModel, buildSwapsExportModel, exportFilename } from "./teams-image";
 import { suggestBalancedSwaps } from "../algorithm/suggest-balanced-swaps";
+import { teamElo } from "../algorithm/elo";
 import type { Player } from "../types";
 
 function makePlayer(name: string, elo: number): Player {
@@ -43,6 +44,12 @@ describe("buildExportModel", () => {
     expect(model.teams[2].players).toEqual(["Marina", "Tiago", "Rafa", "Nina"]);
   });
 
+  test("carries no team total — the print for the whole group hides the balance", () => {
+    for (const team of buildExportModel(PREVIEW, DATE).teams) {
+      expect(team.total).toBeUndefined();
+    }
+  });
+
   test("carries no Elo — the shared image cannot leak ratings", () => {
     const serialized = JSON.stringify(buildExportModel(PREVIEW, DATE));
 
@@ -63,10 +70,18 @@ describe("buildExportModel", () => {
 
 describe("buildSwapsExportModel", () => {
   test("keeps everything the teams-only image has", () => {
-    const { swaps, ...rest } = buildSwapsExportModel(PREVIEW, DATE);
+    const model = buildSwapsExportModel(PREVIEW, DATE);
+    const teamsOnly = buildExportModel(PREVIEW, DATE);
 
-    expect(rest).toEqual(buildExportModel(PREVIEW, DATE));
-    expect(swaps).toBeDefined();
+    expect(model.title).toBe(teamsOnly.title);
+    expect(model.teams.map(({ total, ...team }) => team)).toEqual(teamsOnly.teams);
+    expect(model.swaps).toBeDefined();
+  });
+
+  test("shows each team total, so the group can discuss the trades", () => {
+    const { teams } = buildSwapsExportModel(PREVIEW, DATE);
+
+    expect(teams.map((team) => team.total)).toEqual(PREVIEW.map(teamElo));
   });
 
   test("carries every pair of teams, in reading order", () => {
@@ -91,7 +106,7 @@ describe("buildSwapsExportModel", () => {
     );
   });
 
-  test("carries no Elo — only how far a swap moves the totals", () => {
+  test("carries no per-player Elo — only the team totals and the swap shifts", () => {
     const serialized = JSON.stringify(buildSwapsExportModel(PREVIEW, DATE));
 
     for (const player of PREVIEW.flat()) {
@@ -100,7 +115,12 @@ describe("buildSwapsExportModel", () => {
   });
 
   test("leaves the teams-only model untouched", () => {
-    expect(buildExportModel(PREVIEW, DATE)).not.toHaveProperty("swaps");
+    const teamsOnly = buildExportModel(PREVIEW, DATE);
+
+    expect(teamsOnly).not.toHaveProperty("swaps");
+    for (const team of teamsOnly.teams) {
+      expect(team).not.toHaveProperty("total");
+    }
   });
 });
 

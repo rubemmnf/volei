@@ -1,5 +1,6 @@
 import type { Player } from "../types";
 import { TEAM_META } from "../components/team-meta";
+import { teamElo } from "../algorithm/elo";
 import { suggestBalancedSwaps, TEAM_PAIRS } from "../algorithm/suggest-balanced-swaps";
 import {
   CARD_FILL,
@@ -30,14 +31,16 @@ export type ExportSwapPair = {
 };
 
 /**
- * Everything the shared image is allowed to contain. Deliberately has no Elo:
- * the painter can only draw what lives in here, so ratings cannot leak into a
- * print sent to the group. `swaps` is present only in the variant the
- * organizer explicitly asks for.
+ * Everything the shared image is allowed to contain. Deliberately has no
+ * per-player Elo: the painter can only draw what lives in here, so an
+ * individual's rating cannot leak into a print sent to the group. `swaps` and
+ * the per-team `total` are present only in the variant the organizer
+ * explicitly asks for — that one goes to the few people who discuss the
+ * trades, not to the whole group.
  */
 export type ExportModel = {
   title: string;
-  teams: { name: string; color: string; players: string[] }[];
+  teams: { name: string; color: string; players: string[]; total?: number }[];
   swaps?: ExportSwapPair[];
 };
 
@@ -70,13 +73,16 @@ export function buildExportModel(preview: Player[][], date: Date): ExportModel {
 }
 
 /**
- * The same image plus the low-impact swaps, for the print the organizer sends
- * before the session so the group can ask for trades. Carries the `±shift`
- * numbers but still no Elo.
+ * The same image plus each team's total and the low-impact swaps, for the
+ * print the organizer shares with the people who argue about the trades.
+ * Carries the totals and the `±shift` numbers, but still no per-player Elo.
  */
 export function buildSwapsExportModel(preview: Player[][], date: Date): ExportModel {
+  const base = buildExportModel(preview, date);
+
   return {
-    ...buildExportModel(preview, date),
+    ...base,
+    teams: base.teams.map((team, i) => ({ ...team, total: teamElo(preview[i]) })),
     swaps: TEAM_PAIRS.map(([x, y]) => ({
       x: { name: TEAM_META[x].name, color: TEAM_META[x].hex },
       y: { name: TEAM_META[y].name, color: TEAM_META[y].hex },
@@ -149,6 +155,14 @@ function drawTeamCard(ctx: CanvasRenderingContext2D, team: ExportModel["teams"][
   ctx.fillStyle = team.color;
   ctx.font = `800 46px ${FONT_STACK}`;
   ctx.fillText(team.name, MARGIN + PAD, top + 86);
+
+  if (team.total !== undefined) {
+    ctx.fillStyle = FAINT_COLOR;
+    ctx.font = `800 36px ${FONT_STACK}`;
+    ctx.textAlign = "right";
+    ctx.fillText(String(team.total), MARGIN + cardWidth - PAD, top + 86);
+    ctx.textAlign = "left";
+  }
 
   const columnWidth = (cardWidth - PAD * 2 - 24) / 2;
   team.players.forEach((name, i) => {

@@ -105,7 +105,7 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
       {
         key: "swaps",
         label: "Times + trocas",
-        hint: "Os times mais as trocas de baixo impacto, para o grupo pedir troca antes do jogo.",
+        hint: "Os times com o total de cada um, mais as trocas de baixo impacto — para discutir as trocas antes do jogo.",
         alt: withSwaps.title,
         filename: exportFilename(now, true),
         render: () => renderTeamsImage(withSwaps),
