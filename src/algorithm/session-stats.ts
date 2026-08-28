@@ -150,6 +150,21 @@ export function sessionSummaryStats(session: Session): SessionSummary {
  * night's standings do not.
  */
 export function teamForm(session: Session): TeamForm[] {
+  return formOver(session, session.matches);
+}
+
+/**
+ * The same shape as `teamForm` over the matches that decide the night, for the
+ * standings the organizer reads mid-session.
+ *
+ * Not `teamStats`: that one only ever adds winning margins, which reads as a
+ * leaderboard after the fact but hides how badly a team is being beaten right now.
+ */
+export function teamStandings(session: Session): TeamForm[] {
+  return formOver(session, countedMatches(session));
+}
+
+function formOver(session: Session, matches: readonly Match[]): TeamForm[] {
   const empty: TeamForm[] = session.teams.map((_, teamIndex) => ({
     teamIndex,
     wins: 0,
@@ -157,7 +172,7 @@ export function teamForm(session: Session): TeamForm[] {
     netPoints: 0,
   }));
 
-  return session.matches.reduce<TeamForm[]>((form, match) => {
+  return matches.reduce<TeamForm[]>((form, match) => {
     const winnerIndex = teamIndexForSide(session.teams, winningSide(match));
     const loserIndex = teamIndexForSide(session.teams, losingSide(match));
     if (winnerIndex < 0 || loserIndex < 0 || winnerIndex === loserIndex) return form;

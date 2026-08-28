@@ -8,6 +8,7 @@ import {
   sessionSummaryStats,
   sessionWinners,
   teamForm,
+  teamStandings,
   teamStats,
 } from "./session-stats";
 
@@ -334,6 +335,46 @@ describe("teamForm", () => {
 
   test("is level for every team before a match is played", () => {
     expect(teamForm(session([]))).toEqual([
+      { teamIndex: 0, wins: 0, losses: 0, netPoints: 0 },
+      { teamIndex: 1, wins: 0, losses: 0, netPoints: 0 },
+      { teamIndex: 2, wins: 0, losses: 0, netPoints: 0 },
+    ]);
+  });
+});
+
+describe("teamStandings", () => {
+  test("nets a loss out of the margin, unlike teamStats", () => {
+    const matches = [
+      match("m1", TEAMS[0], TEAMS[1], 25, 19),
+      match("m2", TEAMS[2], TEAMS[0], 25, 21),
+    ];
+    // teamStats only ever adds winning margins, so team 0 keeps its +6...
+    expect(teamStats(session(matches))[0].pointDiff).toBe(6);
+    // ...while the standings shown mid-session net the -4 back out.
+    expect(teamStandings(session(matches))[0]).toEqual({
+      teamIndex: 0,
+      wins: 1,
+      losses: 1,
+      netPoints: 2,
+    });
+  });
+
+  test("ignores the balancing rounds, unlike teamForm", () => {
+    const matches = [
+      match("m1", TEAMS[0], TEAMS[1], 25, 19),
+      match("m2", TEAMS[0], TEAMS[2], 25, 21),
+    ];
+    expect(teamForm(session(matches, TEAMS, 1))[0].wins).toBe(2);
+    expect(teamStandings(session(matches, TEAMS, 1))[0]).toEqual({
+      teamIndex: 0,
+      wins: 1,
+      losses: 0,
+      netPoints: 4,
+    });
+  });
+
+  test("is level for every team before a counted match is played", () => {
+    expect(teamStandings(session([]))).toEqual([
       { teamIndex: 0, wins: 0, losses: 0, netPoints: 0 },
       { teamIndex: 1, wins: 0, losses: 0, netPoints: 0 },
       { teamIndex: 2, wins: 0, losses: 0, netPoints: 0 },
