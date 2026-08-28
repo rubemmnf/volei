@@ -1,4 +1,5 @@
 import type { AppState, Match, StoredPlayer } from "./types";
+import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { skillToElo } from "./algorithm/elo";
 
 export type AppAction =
@@ -20,10 +21,11 @@ export type AppAction =
     }
   | { type: "apply-swap"; teamA: number; playerA: string; teamB: number; playerB: string }
   | { type: "mute-rebalance" }
+  | { type: "update-settings"; settings: Settings }
   | { type: "replace-state"; state: AppState };
 
 export function initialState(): AppState {
-  return { version: 2, players: [], sessions: [] };
+  return { version: 2, players: [], sessions: [], settings: DEFAULT_SETTINGS };
 }
 
 export function activeSession(state: AppState) {
@@ -45,7 +47,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         id: action.id,
         name: action.name,
         skill: action.skill,
-        baseElo: skillToElo(action.skill),
+        baseElo: skillToElo(action.skill, state.settings),
         active: true,
       };
       return { ...state, players: [...state.players, player] };
@@ -58,7 +60,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           if (p.id !== action.id) return p;
           // Reseeding a veteran would rewrite their whole replayed history, so
           // the seed is frozen once the player appears in a session.
-          const baseElo = isPlayerReferenced(state, p.id) ? p.baseElo : skillToElo(action.skill);
+          const baseElo = isPlayerReferenced(state, p.id)
+            ? p.baseElo
+            : skillToElo(action.skill, state.settings);
           return { ...p, name: action.name, skill: action.skill, baseElo };
         }),
       };
@@ -82,7 +86,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         teams: action.teams,
         matches: [],
         finished: false,
-        balancingRounds: 0,
+        balancingRounds: state.settings.defaultBalancingRounds,
         rebalanceMuted: false,
       };
       return { ...state, sessions: [...state.sessions, session] };
@@ -158,6 +162,11 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     // the suggestion. Dismissing the banner without swapping counts too.
     case "mute-rebalance":
       return mapActiveSession(state, (s) => ({ ...s, rebalanceMuted: true }));
+
+    // Tuning only: players and sessions are left alone, so an organizer can
+    // retune mid-season without touching the roster or the history.
+    case "update-settings":
+      return { ...state, settings: action.settings };
 
     case "replace-state":
       return action.state;

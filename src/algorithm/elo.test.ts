@@ -65,3 +65,34 @@ describe("computeEloDeltas", () => {
     expect(() => computeEloDeltas(even, even, 20, 20)).toThrow();
   });
 });
+
+describe("kFactor setting", () => {
+  const teamA = makeTeam([1200, 1200, 1200, 1200]);
+  const teamB = makeTeam([1200, 1200, 1200, 1200]);
+
+  test("a bigger K moves ratings further for the same result", () => {
+    const base = computeEloDeltas(teamA, teamB, 25, 20).deltaA;
+    const doubled = computeEloDeltas(teamA, teamB, 25, 20, { kFactor: 64 }).deltaA;
+
+    expect(doubled).toBeGreaterThan(base);
+    // Not exactly 2x: each delta is rounded independently.
+    expect(Math.abs(doubled - 2 * base)).toBeLessThanOrEqual(1);
+  });
+
+  test("stays zero-sum at any K", () => {
+    const { deltaA, deltaB } = computeEloDeltas(teamA, teamB, 25, 20, { kFactor: 7 });
+    expect(deltaA + deltaB).toBe(0);
+  });
+});
+
+describe("seed range settings", () => {
+  test("maps the ends of a custom scale onto a custom range", () => {
+    const settings = { minElo: 1000, maxElo: 1200, maxSkill: 10 };
+    expect(skillToElo(1, settings)).toBe(1000);
+    expect(skillToElo(10, settings)).toBe(1200);
+  });
+
+  test("clamps a skill above the configured top of the scale", () => {
+    expect(skillToElo(9, { minElo: 800, maxElo: 1600, maxSkill: 5 })).toBe(1600);
+  });
+});

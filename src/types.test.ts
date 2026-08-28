@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { AppStateSchema, MatchSchema, SessionSchema, StoredPlayerSchema } from "./types";
+import { DEFAULT_SETTINGS, MAX_SKILL_CEILING } from "./settings";
 
 const validPlayer = {
   id: "p1",
@@ -39,8 +40,15 @@ describe("StoredPlayerSchema", () => {
     expect(StoredPlayerSchema.safeParse({ ...validPlayer, skill: 0 }).success).toBe(false);
   });
 
-  test("rejects skill above 5", () => {
-    expect(StoredPlayerSchema.safeParse({ ...validPlayer, skill: 6 }).success).toBe(false);
+  test("accepts a skill above the default scale but within the ceiling", () => {
+    // The scale is `settings.maxSkill`, which the schema cannot see. It has to
+    // accept anything a raised scale could have produced.
+    expect(StoredPlayerSchema.safeParse({ ...validPlayer, skill: 8 }).success).toBe(true);
+  });
+
+  test("rejects skill above the ceiling", () => {
+    const tooHigh = { ...validPlayer, skill: MAX_SKILL_CEILING + 1 };
+    expect(StoredPlayerSchema.safeParse(tooHigh).success).toBe(false);
   });
 
   test("rejects empty name", () => {
@@ -110,7 +118,22 @@ describe("SessionSchema", () => {
 describe("AppStateSchema", () => {
   test("accepts a valid app state", () => {
     const state = { version: 2, players: [validPlayer], sessions: [validSession] };
-    expect(AppStateSchema.parse(state)).toEqual(state);
+    expect(AppStateSchema.parse(state)).toEqual({ ...state, settings: DEFAULT_SETTINGS });
+  });
+
+  test("defaults settings for states stored before the field existed", () => {
+    const legacy = { version: 2, players: [], sessions: [] };
+    expect(AppStateSchema.parse(legacy).settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  test("rejects an out-of-range setting", () => {
+    const state = {
+      version: 2,
+      players: [],
+      sessions: [],
+      settings: { ...DEFAULT_SETTINGS, sessionPeriodDays: 0 },
+    };
+    expect(AppStateSchema.safeParse(state).success).toBe(false);
   });
 
   test("rejects unknown version", () => {

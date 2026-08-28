@@ -94,3 +94,25 @@ describe("teamFamiliarity", () => {
     expect(teamFamiliarity(["a1", "a2", "b1", "c1"], matrix)).toBeCloseTo(1);
   });
 });
+
+describe("sessionPeriodDays setting", () => {
+  const settings = { familiarityDecay: 0.75, sessionPeriodDays: 14 };
+
+  test("a fortnightly period leaves a week-old session undecayed", () => {
+    const matrix = buildFamiliarityMatrix(
+      [makeSession("2026-07-03", TEAMS)],
+      new Date("2026-07-10"),
+      settings,
+    );
+    expect(pairFamiliarity(matrix, "a1", "a2")).toBeCloseTo(1);
+  });
+
+  test("a fortnightly period decays once after two weeks", () => {
+    const matrix = buildFamiliarityMatrix(
+      [makeSession("2026-06-26", TEAMS)],
+      new Date("2026-07-10"),
+      settings,
+    );
+    expect(pairFamiliarity(matrix, "a1", "a2")).toBeCloseTo(0.75);
+  });
+});

@@ -1,4 +1,5 @@
 import type { Match, Session } from "../types";
+import { DEFAULT_SETTINGS, type Settings } from "../settings";
 
 export type TeamStat = {
   teamIndex: number;
@@ -185,22 +186,26 @@ export function teamForm(session: Session): TeamForm[] {
  * swamping a genuine rating difference. The points term only separates teams whose
  * win-loss records already tie.
  */
-export const ELO_PER_NET_WIN = 100;
-export const ELO_PER_NET_POINT = 5;
-
-export function formBias(form: TeamForm): number {
-  return ELO_PER_NET_WIN * (form.wins - form.losses) + ELO_PER_NET_POINT * form.netPoints;
+export function formBias(
+  form: TeamForm,
+  { eloPerNetWin, eloPerNetPoint }: Pick<Settings, "eloPerNetWin" | "eloPerNetPoint"> =
+    DEFAULT_SETTINGS,
+): number {
+  return eloPerNetWin * (form.wins - form.losses) + eloPerNetPoint * form.netPoints;
 }
-
-/** Net wins at which a team counts as running away with the night. */
-export const DOMINANCE_THRESHOLD = 2;
 
 /**
  * The runaway leader and the team being run over, or null when the night is close
  * enough to leave alone. Both ends have to be extreme: a team on a streak against
  * two different opponents is the format working, not a broken pairing.
+ *
+ * `dominanceThreshold` is the net-win count at which a team counts as running
+ * away with the night.
  */
-export function lopsidedPairing(session: Session): { leader: number; trailer: number } | null {
+export function lopsidedPairing(
+  session: Session,
+  { dominanceThreshold }: Pick<Settings, "dominanceThreshold"> = DEFAULT_SETTINGS,
+): { leader: number; trailer: number } | null {
   const net = (team: TeamForm) => team.wins - team.losses;
   const form = teamForm(session);
 
@@ -208,7 +213,7 @@ export function lopsidedPairing(session: Session): { leader: number; trailer: nu
   const trailer = form.reduce((worst, team) => (net(team) < net(worst) ? team : worst));
 
   if (leader.teamIndex === trailer.teamIndex) return null;
-  if (net(leader) < DOMINANCE_THRESHOLD || net(trailer) > -DOMINANCE_THRESHOLD) return null;
+  if (net(leader) < dominanceThreshold || net(trailer) > -dominanceThreshold) return null;
 
   return { leader: leader.teamIndex, trailer: trailer.teamIndex };
 }

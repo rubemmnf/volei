@@ -1,9 +1,9 @@
 import type { Player } from "../types";
 import { teamElo } from "./elo";
 import { teamFamiliarity, type FamiliarityMatrix } from "./familiarity";
+import { DEFAULT_SETTINGS } from "../settings";
 
 const TEAM_SIZE = 4;
-const DEFAULT_LIMIT = 3;
 
 export type SwapSuggestion = { fromX: Player; fromY: Player };
 
@@ -41,7 +41,7 @@ export function rankSwaps(
   teamX: Player[],
   teamY: Player[],
   matrix: FamiliarityMatrix,
-  { limit = DEFAULT_LIMIT, biasX = 0, biasY = 0 }: RankSwapsOptions = {},
+  { limit = DEFAULT_SETTINGS.swapSuggestionLimit, biasX = 0, biasY = 0 }: RankSwapsOptions = {},
 ): RankedSwap[] {
   if (teamX.length !== TEAM_SIZE || teamY.length !== TEAM_SIZE) {
     throw new Error(`Both teams must have exactly ${TEAM_SIZE} players`);

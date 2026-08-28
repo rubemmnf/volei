@@ -1,7 +1,7 @@
 import { z } from "zod";
+import { DEFAULT_SETTINGS, MAX_SKILL_CEILING, SettingsSchema } from "./settings";
 
 export const MIN_SKILL = 1;
-export const MAX_SKILL = 5;
 
 /**
  * The persisted player shape. `elo` is deliberately absent: a rating is derived
@@ -11,7 +11,11 @@ export const MAX_SKILL = 5;
 export const StoredPlayerSchema = z.object({
   id: z.string(),
   name: z.string().min(1),
-  skill: z.number().int().min(MIN_SKILL).max(MAX_SKILL),
+  /**
+   * Validated against the absolute ceiling, not `settings.maxSkill`: the schema
+   * cannot see settings, and lowering the scale must not reject a stored player.
+   */
+  skill: z.number().int().min(MIN_SKILL).max(MAX_SKILL_CEILING),
   baseElo: z.number(),
   active: z.boolean(),
 });
@@ -55,6 +59,12 @@ export const AppStateSchema = z.object({
   version: z.literal(2),
   players: z.array(StoredPlayerSchema),
   sessions: z.array(SessionSchema),
+  /**
+   * Defaulted rather than migrated, the same way `balancingRounds` is: every
+   * state and backup written before settings existed keeps loading, and picks
+   * up the values that used to be hardcoded.
+   */
+  settings: SettingsSchema.default(DEFAULT_SETTINGS),
 });
 
 export type StoredPlayer = z.infer<typeof StoredPlayerSchema>;

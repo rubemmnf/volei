@@ -1,7 +1,9 @@
 import type { Session } from "../types";
+import { DEFAULT_SETTINGS, type Settings } from "../settings";
 
-export const DECAY = 0.75;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type DecaySettings = Pick<Settings, "familiarityDecay" | "sessionPeriodDays">;
 
 export type FamiliarityMatrix = Record<string, number>;
 
@@ -15,17 +17,22 @@ export function pairFamiliarity(matrix: FamiliarityMatrix, id1: string, id2: str
 
 /**
  * Recency-decayed co-teammate matrix: a pair that shared a team in a session
- * contributes DECAY^weeksAgo, counted once per session regardless of match
+ * contributes decay^periodsAgo, counted once per session regardless of match
  * count. Pairs are drawn from both the session's locked teams and the actual
  * match rosters, so mid-session swaps are reflected too.
  */
-export function buildFamiliarityMatrix(sessions: Session[], refDate: Date): FamiliarityMatrix {
+export function buildFamiliarityMatrix(
+  sessions: Session[],
+  refDate: Date,
+  { familiarityDecay, sessionPeriodDays }: DecaySettings = DEFAULT_SETTINGS,
+): FamiliarityMatrix {
   const matrix: FamiliarityMatrix = {};
+  const periodMs = sessionPeriodDays * DAY_MS;
 
   for (const session of sessions) {
     const age = refDate.getTime() - new Date(session.date).getTime();
-    const weeksAgo = Math.max(0, Math.floor(age / WEEK_MS));
-    const weight = Math.pow(DECAY, weeksAgo);
+    const periodsAgo = Math.max(0, Math.floor(age / periodMs));
+    const weight = Math.pow(familiarityDecay, periodsAgo);
 
     const pairs = new Set<string>();
     for (const team of session.teams) addTeamPairs(pairs, team);

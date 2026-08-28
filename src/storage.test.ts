@@ -2,11 +2,13 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { STORAGE_KEY, exportState, importState, loadState, migrate, saveState } from "./storage";
 import { AppStateSchema, type AppState } from "./types";
+import { DEFAULT_SETTINGS } from "./settings";
 import { computeEloDeltas, skillToElo } from "./algorithm/elo";
 import { deriveRatings } from "./algorithm/derive-ratings";
 
 const sampleState: AppState = {
   version: 2,
+  settings: DEFAULT_SETTINGS,
   players: [{ id: "p1", name: "John", skill: 4, baseElo: 1200, active: true }],
   sessions: [],
 };
@@ -142,3 +144,40 @@ function v1Fixture() {
     sessions: [{ id: "s1", date: "2026-07-10", teams, matches, finished: true }],
   };
 }
+
+describe("settings persistence", () => {
+  test("a state stored before settings existed loads with the defaults", () => {
+    // Deliberately no `settings` key: this is what every v2 blob on disk looks like.
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: 2, players: sampleState.players, sessions: [] }),
+    );
+    const loaded = loadState();
+
+    expect(loaded.status).toBe("ok");
+    expect(loaded.status === "ok" && loaded.state.settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  test("a backup without settings imports with the defaults", () => {
+    const text = JSON.stringify({ version: 2, players: [], sessions: [] });
+    expect(importState(text).settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  test("custom settings survive an export/import round trip", () => {
+    const tuned: AppState = {
+      ...sampleState,
+      settings: { ...DEFAULT_SETTINGS, kFactor: 48, gameDay: 4, sessionPeriodDays: 14 },
+    };
+    expect(importState(exportState(tuned))).toEqual(tuned);
+  });
+
+  test("a backup carrying an out-of-range setting is rejected", () => {
+    const text = JSON.stringify({
+      version: 2,
+      players: [],
+      sessions: [],
+      settings: { ...DEFAULT_SETTINGS, familiarityDecay: 42 },
+    });
+    expect(() => importState(text)).toThrow();
+  });
+});

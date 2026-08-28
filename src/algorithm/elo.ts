@@ -1,17 +1,19 @@
-import { MAX_SKILL, MIN_SKILL } from "../types";
+import { MIN_SKILL } from "../types";
+import { DEFAULT_SETTINGS, type Settings } from "../settings";
 
 /** Anything carrying a rating — `Player`, or a raw record mid-migration. */
 export type Rated = { elo: number };
 
-const MIN_ELO = 800;
-const MAX_ELO = 1600;
-const K_FACTOR = 32;
+type SeedSettings = Pick<Settings, "minElo" | "maxElo" | "maxSkill">;
 
-/** Linear map from a 1-5 skill rating to the 800-1600 Elo range (clamped). */
-export function skillToElo(skill: number): number {
-  const clamped = Math.max(MIN_SKILL, Math.min(MAX_SKILL, skill));
-  const fraction = (clamped - MIN_SKILL) / (MAX_SKILL - MIN_SKILL);
-  return Math.round(MIN_ELO + fraction * (MAX_ELO - MIN_ELO));
+/** Linear map from a skill rating to the configured Elo seed range (clamped). */
+export function skillToElo(
+  skill: number,
+  { minElo, maxElo, maxSkill }: SeedSettings = DEFAULT_SETTINGS,
+): number {
+  const clamped = Math.max(MIN_SKILL, Math.min(maxSkill, skill));
+  const fraction = (clamped - MIN_SKILL) / (maxSkill - MIN_SKILL);
+  return Math.round(minElo + fraction * (maxElo - minElo));
 }
 
 /** Combined Elo of a team — the number the organizer balances on. */
@@ -31,6 +33,7 @@ export function computeEloDeltas(
   sideB: Rated[],
   scoreA: number,
   scoreB: number,
+  { kFactor }: Pick<Settings, "kFactor"> = DEFAULT_SETTINGS,
 ): EloDeltas {
   if (scoreA === scoreB) {
     throw new Error("Volleyball matches cannot end in a tie");
@@ -42,7 +45,7 @@ export function computeEloDeltas(
   const actualA = scoreA > scoreB ? 1 : 0;
   const margin = Math.abs(scoreA - scoreB);
 
-  const deltaA = Math.round(K_FACTOR * Math.log(margin + 1) * (actualA - expectedA));
+  const deltaA = Math.round(kFactor * Math.log(margin + 1) * (actualA - expectedA));
   return { deltaA, deltaB: -deltaA };
 }
 

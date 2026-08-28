@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { AppState, Match, Session } from "../types";
+import { DEFAULT_SETTINGS } from "../settings";
 import { deriveRatings } from "./derive-ratings";
 import { computeEloDeltas, skillToElo } from "./elo";
 
@@ -23,7 +24,7 @@ function stateWith(matches: Match[], finished = true): AppState {
     balancingRounds: 0,
     rebalanceMuted: false,
   };
-  return { version: 2, players, sessions: [session] };
+  return { version: 2, players, sessions: [session], settings: DEFAULT_SETTINGS };
 }
 
 const match = (id: string, a: number, b: number, scoreA: number, scoreB: number): Match => ({

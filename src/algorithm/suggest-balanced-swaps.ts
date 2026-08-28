@@ -1,8 +1,8 @@
 import type { Player } from "../types";
 import { teamElo } from "./elo";
+import { DEFAULT_SETTINGS } from "../settings";
 
 const TEAM_SIZE = 4;
-const DEFAULT_LIMIT = 3;
 
 /** Every pair of teams, in the order the organizer reads them. */
 export const TEAM_PAIRS: readonly (readonly [number, number])[] = [
@@ -35,7 +35,7 @@ export type BalancedSwap = {
 export function suggestBalancedSwaps(
   teamX: Player[],
   teamY: Player[],
-  limit = DEFAULT_LIMIT,
+  limit = DEFAULT_SETTINGS.swapSuggestionLimit,
 ): BalancedSwap[] {
   if (teamX.length !== TEAM_SIZE || teamY.length !== TEAM_SIZE) {
     throw new Error(`Both teams must have exactly ${TEAM_SIZE} players`);

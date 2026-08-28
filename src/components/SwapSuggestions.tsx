@@ -6,6 +6,8 @@ export type SwapTarget = { team: number; playerId: string };
 
 type Props = {
   preview: Player[][];
+  /** How many options to show per team pair — `settings.swapSuggestionLimit`. */
+  limit: number;
   onSwap: (a: SwapTarget, b: SwapTarget) => void;
 };
 
@@ -13,7 +15,7 @@ type Props = {
  * Organizer-only: the swaps that move the team totals least, for every pair of
  * teams. Never part of the exported image.
  */
-export function SwapSuggestions({ preview, onSwap }: Props) {
+export function SwapSuggestions({ preview, limit, onSwap }: Props) {
   return (
     <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 flex flex-col gap-4">
       <div>
@@ -33,7 +35,7 @@ export function SwapSuggestions({ preview, onSwap }: Props) {
             <span className={TEAM_META[y].text}>{TEAM_META[y].name}</span>
           </p>
           <ul className="flex flex-col gap-1">
-            {suggestBalancedSwaps(preview[x], preview[y]).map((swap) => (
+            {suggestBalancedSwaps(preview[x], preview[y], limit).map((swap) => (
               <li key={`${swap.fromX.id}-${swap.fromY.id}`}>
                 <button
                   type="button"

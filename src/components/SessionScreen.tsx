@@ -92,12 +92,16 @@ export function SessionScreen({ state, players, dispatch }: Props) {
   const form = teamForm(session);
 
   const openSwapFor = (ia: number, ib: number) => {
-    const matrix = buildFamiliarityMatrix(state.sessions, new Date());
+    const matrix = buildFamiliarityMatrix(state.sessions, new Date(), state.settings);
     const suggestions = rankSwaps(
       resolveTeam(session.teams[ia]),
       resolveTeam(session.teams[ib]),
       matrix,
-      { biasX: formBias(form[ia]), biasY: formBias(form[ib]) },
+      {
+        limit: state.settings.swapSuggestionLimit,
+        biasX: formBias(form[ia], state.settings),
+        biasY: formBias(form[ib], state.settings),
+      },
     );
     setPendingSwap({ teamA: ia, teamB: ib, suggestions });
   };
@@ -110,7 +114,7 @@ export function SessionScreen({ state, players, dispatch }: Props) {
   // Muted for the rest of the night once acted on: applying a swap leaves the
   // win/loss record untouched, so the condition that raised the banner is still
   // true afterwards and the banner would otherwise never go away.
-  const lopsided = session.rebalanceMuted ? null : lopsidedPairing(session);
+  const lopsided = session.rebalanceMuted ? null : lopsidedPairing(session, state.settings);
   const bothSelected = selected.length === 2;
 
   return (

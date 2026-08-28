@@ -3,6 +3,7 @@ import type { AppState, Player } from "../types";
 import { activeSession, type AppAction } from "../app-state";
 import { teamElo } from "../algorithm/elo";
 import { buildFamiliarityMatrix } from "../algorithm/familiarity";
+import { resolveSessionDate, WEEKDAYS } from "../settings";
 import { generateTeams } from "../algorithm/generate-teams";
 import {
   buildExportModel,
@@ -49,6 +50,10 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
   const attending = players.filter((p) => p.active);
   const canGenerate = attending.length === 12;
 
+  // Resolved up front so the organizer sees the date before committing to it: with
+  // a game day configured this snaps back to the last one rather than today.
+  const sessionDate = resolveSessionDate(new Date(), state.settings.gameDay);
+
   // Preview can outlive the roster it was built from (Settings import / Delete All
   // Data replace state without unmounting this screen) — drop it if any id is gone.
   const rosterIds = new Set(players.map((p) => p.id));
@@ -65,8 +70,8 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
   };
 
   const handleGenerate = () => {
-    const matrix = buildFamiliarityMatrix(state.sessions, new Date());
-    setPreview(generateTeams(attending, matrix));
+    const matrix = buildFamiliarityMatrix(state.sessions, new Date(), state.settings);
+    setPreview(generateTeams(attending, matrix, state.settings));
     setSelection(null);
     setPendingExport(null);
   };
@@ -118,7 +123,7 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
     dispatch({
       type: "start-session",
       id: crypto.randomUUID(),
-      date: new Date().toISOString().slice(0, 10),
+      date: sessionDate,
       teams: validPreview.map((team) => team.map((p) => p.id)) as [string[], string[], string[]],
     });
     setPreview(null);
@@ -215,7 +220,11 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
             ))}
           </div>
 
-          <SwapSuggestions preview={validPreview} onSwap={handleSuggestedSwap} />
+          <SwapSuggestions
+            preview={validPreview}
+            limit={state.settings.swapSuggestionLimit}
+            onSwap={handleSuggestedSwap}
+          />
 
           <button
             type="button"
@@ -232,6 +241,10 @@ export function TeamsScreen({ state, players, dispatch, onSessionStarted }: Prop
           >
             Start Session
           </button>
+          <p className="text-zinc-500 text-xs text-center -mt-2">
+            Dated {sessionDate}
+            {state.settings.gameDay !== null && ` · ${WEEKDAYS[state.settings.gameDay]} game day`}
+          </p>
         </>
       )}
 

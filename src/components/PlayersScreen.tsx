@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { MAX_SKILL, MIN_SKILL, type AppState, type Player } from "../types";
+import { MIN_SKILL, type AppState, type Player } from "../types";
 import { isPlayerReferenced, type AppAction } from "../app-state";
 
-const SKILLS = Array.from({ length: MAX_SKILL - MIN_SKILL + 1 }, (_, i) => MIN_SKILL + i);
-const DEFAULT_SKILL = 3;
+/** The scale is a setting, so the option list is built per render, not once. */
+function skillScale(maxSkill: number): number[] {
+  return Array.from({ length: maxSkill - MIN_SKILL + 1 }, (_, i) => MIN_SKILL + i);
+}
+
+/** Middle of the configured scale, so the default sits where "average" does. */
+function defaultSkill(maxSkill: number): number {
+  return Math.round((MIN_SKILL + maxSkill) / 2);
+}
 
 type Props = {
   state: AppState;
@@ -12,16 +19,23 @@ type Props = {
 };
 
 export function PlayersScreen({ state, players, dispatch }: Props) {
+  const { maxSkill } = state.settings;
+  const skills = skillScale(maxSkill);
+
   const [name, setName] = useState("");
-  const [skill, setSkill] = useState(DEFAULT_SKILL);
+  const [skill, setSkill] = useState(() => defaultSkill(maxSkill));
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Lowering the scale while the form is open would otherwise submit an
+  // out-of-range skill, so the pending value is clamped at render.
+  const pendingSkill = Math.min(skill, maxSkill);
 
   const handleAdd = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    dispatch({ type: "add-player", id: crypto.randomUUID(), name: trimmed, skill });
+    dispatch({ type: "add-player", id: crypto.randomUUID(), name: trimmed, skill: pendingSkill });
     setName("");
-    setSkill(DEFAULT_SKILL);
+    setSkill(defaultSkill(maxSkill));
   };
 
   const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name));
@@ -54,11 +68,11 @@ export function PlayersScreen({ state, players, dispatch }: Props) {
             </label>
             <select
               id="player-skill"
-              value={skill}
+              value={pendingSkill}
               onChange={(e) => setSkill(Number(e.target.value))}
               className="bg-black text-white rounded-xl border border-zinc-700 px-3 py-3"
             >
-              {SKILLS.map((s) => (
+              {skills.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -82,6 +96,7 @@ export function PlayersScreen({ state, players, dispatch }: Props) {
             <EditRow
               key={player.id}
               player={player}
+              skills={skills}
               deletable={!isPlayerReferenced(state, player.id)}
               onSave={(newName, newSkill) => {
                 dispatch({ type: "update-player", id: player.id, name: newName, skill: newSkill });
@@ -118,14 +133,18 @@ export function PlayersScreen({ state, players, dispatch }: Props) {
 
 type EditRowProps = {
   player: { name: string; skill: number };
+  skills: number[];
   deletable: boolean;
   onSave: (name: string, skill: number) => void;
   onDelete: () => void;
   onCancel: () => void;
 };
 
-function EditRow({ player, deletable, onSave, onDelete, onCancel }: EditRowProps) {
+function EditRow({ player, skills, deletable, onSave, onDelete, onCancel }: EditRowProps) {
   const [name, setName] = useState(player.name);
+  // A player stored under a higher scale keeps their value until edited, so the
+  // option list has to include it or the select would silently show something else.
+  const options = skills.includes(player.skill) ? skills : [...skills, player.skill];
   const [skill, setSkill] = useState(player.skill);
 
   return (
@@ -143,7 +162,7 @@ function EditRow({ player, deletable, onSave, onDelete, onCancel }: EditRowProps
           onChange={(e) => setSkill(Number(e.target.value))}
           className="bg-black text-white rounded-xl border border-zinc-700 px-2 py-2"
         >
-          {SKILLS.map((s) => (
+          {options.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

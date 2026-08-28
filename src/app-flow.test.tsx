@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
-import { saveState } from "./storage";
+import { loadState, saveState } from "./storage";
 import { renderTeamsImage } from "./export/teams-image";
 import { renderResultsImage } from "./export/results-image";
 import type { AppState, Match } from "./types";
+import { DEFAULT_SETTINGS } from "./settings";
 
 // jsdom has no canvas backend — keep the painter out of the component tests and
 // assert on the model it is handed instead.
@@ -37,6 +38,7 @@ beforeEach(() => {
 function rosterState(count: number): AppState {
   return {
     version: 2,
+    settings: DEFAULT_SETTINGS,
     players: Array.from({ length: count }, (_, i) => ({
       id: `p${i + 1}`,
       name: `P${i + 1}`,
@@ -660,6 +662,7 @@ const ELO_BY_NAME = new Map(VARIED_ELOS.map((elo, i) => [`V${i + 1}`, elo]));
 function variedRosterState(): AppState {
   return {
     version: 2,
+    settings: DEFAULT_SETTINGS,
     players: VARIED_ELOS.map((elo, i) => ({
       id: `v${i + 1}`,
       name: `V${i + 1}`,
@@ -791,3 +794,103 @@ describe("session results export", () => {
     expect(screen.queryByRole("button", { name: /baixar/i })).not.toBeInTheDocument();
   });
 });
+
+describe("configurable tuning", () => {
+  test("a new session starts at the configured number of balancing rounds", async () => {
+    saveState({
+      ...twelvePlayersState(),
+      settings: { ...DEFAULT_SETTINGS, defaultBalancingRounds: 2 },
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Teams" }));
+    await user.click(screen.getByRole("button", { name: /generate teams/i }));
+    await user.click(screen.getByRole("button", { name: /start session/i }));
+
+    expect(screen.getByText(/first 2 matches/i)).toBeInTheDocument();
+  });
+
+  test("editing a tuning field persists it without touching the roster", async () => {
+    saveState(twelvePlayersState());
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.change(screen.getByLabelText("K-factor"), { target: { value: "48" } });
+
+    const loaded = loadState();
+    expect(loaded.status).toBe("ok");
+    expect(loaded.status === "ok" && loaded.state.settings.kFactor).toBe(48);
+    expect(loaded.status === "ok" && loaded.state.players).toHaveLength(12);
+  });
+
+  test("an out-of-range value is refused and the stored setting is left alone", async () => {
+    saveState(twelvePlayersState());
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const field = screen.getByLabelText("Familiarity decay");
+    fireEvent.change(field, { target: { value: "5" } });
+
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    const loaded = loadState();
+    expect(loaded.status === "ok" && loaded.state.settings.familiarityDecay).toBe(0.75);
+  });
+
+  test("reset restores the defaults and keeps the roster", async () => {
+    saveState({
+      ...twelvePlayersState(),
+      settings: { ...DEFAULT_SETTINGS, kFactor: 99, gameDay: 4 },
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: /reset tuning to defaults/i }));
+
+    const loaded = loadState();
+    expect(loaded.status === "ok" && loaded.state.settings).toEqual(DEFAULT_SETTINGS);
+    expect(loaded.status === "ok" && loaded.state.players).toHaveLength(12);
+  });
+
+  test("with no game day the session is dated today", async () => {
+    saveState(twelvePlayersState());
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Teams" }));
+    await user.click(screen.getByRole("button", { name: /generate teams/i }));
+
+    expect(screen.getByText(new RegExp(`Dated ${localIso(new Date())}`))).toBeInTheDocument();
+  });
+
+  test("a configured game day dates the session back to the last one", async () => {
+    // Yesterday's weekday, so the resolved date has to move off today. The
+    // expectation is plain date arithmetic, not a second call to the resolver.
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    saveState({
+      ...twelvePlayersState(),
+      settings: { ...DEFAULT_SETTINGS, gameDay: yesterday.getDay() },
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Teams" }));
+    await user.click(screen.getByRole("button", { name: /generate teams/i }));
+    expect(screen.getByText(new RegExp(`Dated ${localIso(yesterday)}`))).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /start session/i }));
+    expect(screen.getByText(new RegExp(localIso(yesterday)))).toBeInTheDocument();
+  });
+});
+
+/** The local YYYY-MM-DD of a date, matching how a session is stamped. */
+function localIso(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}

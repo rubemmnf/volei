@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Match, Session } from "../types";
+import { DEFAULT_SETTINGS } from "../settings";
 import {
-  DOMINANCE_THRESHOLD,
   formBias,
   lopsidedPairing,
   rankTeams,
@@ -387,7 +387,7 @@ describe("lopsidedPairing", () => {
   });
 
   test("stays quiet until the lead reaches the threshold", () => {
-    expect(DOMINANCE_THRESHOLD).toBeGreaterThan(1);
+    expect(DEFAULT_SETTINGS.dominanceThreshold).toBeGreaterThan(1);
     expect(lopsidedPairing(session([match("m1", TEAMS[0], TEAMS[1], 25, 20)]))).toBeNull();
   });
 
