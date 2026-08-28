@@ -239,6 +239,23 @@ describe("apply-swap", () => {
   });
 });
 
+describe("mute-rebalance", () => {
+  test("starts a session unmuted", () => {
+    expect(stateWithActiveSession().sessions[0].rebalanceMuted).toBe(false);
+  });
+
+  test("mutes the lopsided banner for the active session", () => {
+    const state = appReducer(stateWithActiveSession(), { type: "mute-rebalance" });
+    expect(state.sessions[0].rebalanceMuted).toBe(true);
+  });
+
+  test("leaves a finished session alone", () => {
+    const finished = appReducer(stateWithActiveSession(), { type: "end-session" });
+    const state = appReducer(finished, { type: "mute-rebalance" });
+    expect(state.sessions[0].rebalanceMuted).toBe(false);
+  });
+});
+
 describe("replace-state", () => {
   test("replaces the whole state (import)", () => {
     const incoming = stateWith12Players();

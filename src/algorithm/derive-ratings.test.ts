@@ -21,6 +21,7 @@ function stateWith(matches: Match[], finished = true): AppState {
     matches,
     finished,
     balancingRounds: 0,
+    rebalanceMuted: false,
   };
   return { version: 2, players, sessions: [session] };
 }

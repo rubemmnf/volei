@@ -69,6 +69,7 @@ function activeSessionState(): AppState {
         matches: [],
         finished: false,
         balancingRounds: 0,
+        rebalanceMuted: false,
       },
     ],
   };
@@ -101,6 +102,7 @@ function finishedSessionState(): AppState {
         ],
         finished: true,
         balancingRounds: 0,
+        rebalanceMuted: false,
       },
     ],
   };
@@ -198,6 +200,7 @@ describe("state replacement resilience", () => {
           matches: [],
           finished: false,
           balancingRounds: 0,
+          rebalanceMuted: false,
         },
       ],
     });
@@ -288,6 +291,7 @@ describe("session flow", () => {
           ],
           finished: false,
           balancingRounds: 3,
+          rebalanceMuted: false,
         },
       ],
     };
@@ -326,6 +330,68 @@ describe("session flow", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]).toHaveTextContent(/Time A/);
     expect(rows[0]).toHaveTextContent(/Time B/);
+  });
+
+  async function applySuggestedSwapFromBanner(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(rebalanceButton()!);
+    await user.click(screen.getAllByRole("button", { name: /^swap .* with .*/i })[0]);
+    await user.click(screen.getByRole("button", { name: /apply swap/i }));
+  }
+
+  // The banner used to sit at the top of the screen while the organizer worked at the
+  // bottom, so a whole night went by without anyone seeing it.
+  test("the banner sits below the score entry, where the organizer already is", async () => {
+    saveState(lopsidedSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+
+    const saveButton = screen.getByRole("button", { name: /save match/i });
+    const banner = rebalanceButton()!;
+    expect(saveButton.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  test("applying a swap silences the banner and says what was traded", async () => {
+    saveState(lopsidedSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+    await applySuggestedSwapFromBanner(user);
+
+    expect(rebalanceButton()).not.toBeInTheDocument();
+    expect(screen.getByText(/^Swapped .+ ⇄ .+$/)).toBeInTheDocument();
+  });
+
+  // A swap rewrites the teams but not the win/loss record the banner is derived from,
+  // so without the stored mute the very next match would raise it again.
+  test("the banner stays down for the rest of the night once acted on", async () => {
+    saveState(lopsidedSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+    await applySuggestedSwapFromBanner(user);
+
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "15");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+
+    expect(rebalanceButton()).not.toBeInTheDocument();
+  });
+
+  test("dismissing the banner sticks across a reload", async () => {
+    saveState(lopsidedSessionState());
+    const user = userEvent.setup();
+    const first = render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+    await user.click(screen.getByRole("button", { name: /dismiss suggestion/i }));
+    expect(rebalanceButton()).not.toBeInTheDocument();
+
+    first.unmount();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+    expect(rebalanceButton()).not.toBeInTheDocument();
   });
 
   test("save stays disabled on a tied score", async () => {

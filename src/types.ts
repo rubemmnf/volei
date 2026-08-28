@@ -41,6 +41,14 @@ export const SessionSchema = z.object({
    * Defaults so sessions stored before the field existed keep loading.
    */
   balancingRounds: z.number().int().min(0).default(0),
+  /**
+   * Set once the organizer acts on or dismisses the lopsided-pairing banner.
+   * The banner's own button cannot clear its condition — a swap rewrites the
+   * teams but not the win/loss record it is derived from — so the acknowledgement
+   * has to be stored rather than derived. Defaults for sessions stored before
+   * the field existed.
+   */
+  rebalanceMuted: z.boolean().default(false),
 });
 
 export const AppStateSchema = z.object({

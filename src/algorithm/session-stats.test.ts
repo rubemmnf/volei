@@ -32,7 +32,15 @@ function session(
   teams: Session["teams"] = TEAMS,
   balancingRounds = 0,
 ): Session {
-  return { id: "s1", date: "2026-07-10", teams, matches, finished: true, balancingRounds };
+  return {
+    id: "s1",
+    date: "2026-07-10",
+    teams,
+    matches,
+    finished: true,
+    balancingRounds,
+    rebalanceMuted: false,
+  };
 }
 
 function stat(

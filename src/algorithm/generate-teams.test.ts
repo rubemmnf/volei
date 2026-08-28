@@ -61,6 +61,7 @@ describe("generateTeams", () => {
         matches: [],
         finished: true,
         balancingRounds: 0,
+        rebalanceMuted: false,
       },
     ];
     const matrix = buildFamiliarityMatrix(history, new Date("2026-07-10"));

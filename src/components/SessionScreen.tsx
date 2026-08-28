@@ -29,6 +29,7 @@ export function SessionScreen({ state, players, dispatch }: Props) {
   const [pendingSwap, setPendingSwap] = useState<SwapContext | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
+  const [lastSwap, setLastSwap] = useState<string | null>(null);
 
   const session = activeSession(state);
   if (!session) {
@@ -64,6 +65,7 @@ export function SessionScreen({ state, players, dispatch }: Props) {
   }
 
   const toggleTeam = (index: number) => {
+    setLastSwap(null); // the confirmation belongs to the pairing it was made on
     setSelected((prev) =>
       prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index].slice(-2),
     );
@@ -105,7 +107,10 @@ export function SessionScreen({ state, players, dispatch }: Props) {
     openSwapFor(leader, trailer);
   };
 
-  const lopsided = lopsidedPairing(session);
+  // Muted for the rest of the night once acted on: applying a swap leaves the
+  // win/loss record untouched, so the condition that raised the banner is still
+  // true afterwards and the banner would otherwise never go away.
+  const lopsided = session.rebalanceMuted ? null : lopsidedPairing(session);
   const bothSelected = selected.length === 2;
 
   return (
@@ -113,16 +118,6 @@ export function SessionScreen({ state, players, dispatch }: Props) {
       <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
         Session · {session.date}
       </h2>
-
-      {lopsided && (
-        <LopsidedBanner
-          leaderName={TEAM_META[lopsided.leader].name}
-          trailerName={TEAM_META[lopsided.trailer].name}
-          leaderRecord={record(form[lopsided.leader])}
-          trailerRecord={record(form[lopsided.trailer])}
-          onRebalance={() => openLopsidedSwap(lopsided.leader, lopsided.trailer)}
-        />
-      )}
 
       <p className="text-zinc-500 text-xs">Tap the two teams about to play.</p>
       <div className="flex flex-col gap-3">
@@ -182,6 +177,22 @@ export function SessionScreen({ state, players, dispatch }: Props) {
         />
       )}
 
+      {/*
+        Below ScoreEntry, not above it: the banner appears the instant a match is
+        saved, and inserting it higher would shove the Save button out from under
+        the organizer's thumb. Here it lands next to the swap it is asking for.
+      */}
+      {lopsided && (
+        <LopsidedBanner
+          leaderName={TEAM_META[lopsided.leader].name}
+          trailerName={TEAM_META[lopsided.trailer].name}
+          leaderRecord={record(form[lopsided.leader])}
+          trailerRecord={record(form[lopsided.trailer])}
+          onRebalance={() => openLopsidedSwap(lopsided.leader, lopsided.trailer)}
+          onDismiss={() => dispatch({ type: "mute-rebalance" })}
+        />
+      )}
+
       {bothSelected && (
         <button
           type="button"
@@ -191,6 +202,18 @@ export function SessionScreen({ state, players, dispatch }: Props) {
           Swap Players
         </button>
       )}
+
+      {/*
+        The teams change above the fold, so the swap needs an acknowledgement down here.
+        aria-live rather than role="status": ScoreEntry already owns the one status
+        region on this screen, and a second would make it ambiguous to address.
+      */}
+      <div
+        aria-live="polite"
+        className="empty:hidden text-center text-sm font-bold text-amber-400"
+      >
+        {lastSwap}
+      </div>
 
       <div className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800 flex items-center gap-3">
         <div className="flex-1">
@@ -292,6 +315,10 @@ export function SessionScreen({ state, players, dispatch }: Props) {
               teamB: pendingSwap.teamB,
               playerB,
             });
+            dispatch({ type: "mute-rebalance" });
+            setLastSwap(
+              `Swapped ${playerById.get(playerA)!.name} ⇄ ${playerById.get(playerB)!.name}`,
+            );
             setPendingSwap(null);
           }}
           onCancel={() => setPendingSwap(null)}
@@ -311,6 +338,7 @@ type LopsidedBannerProps = {
   leaderRecord: string;
   trailerRecord: string;
   onRebalance: () => void;
+  onDismiss: () => void;
 };
 
 function LopsidedBanner({
@@ -319,14 +347,30 @@ function LopsidedBanner({
   leaderRecord,
   trailerRecord,
   onRebalance,
+  onDismiss,
 }: LopsidedBannerProps) {
   return (
-    <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex flex-col gap-3">
-      <p className="text-sm text-amber-100">
-        <span className="font-black">{leaderName}</span> is running the night at {leaderRecord}
-        {" while "}
-        <span className="font-black">{trailerName}</span> sits at {trailerRecord}.
-      </p>
+    // A live region rather than a scroll: the banner arrives right after a score is
+    // saved, and yanking the page under the organizer's thumb would be worse.
+    <div
+      role="status"
+      className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex flex-col gap-3"
+    >
+      <div className="flex items-start gap-3">
+        <p className="flex-1 text-sm text-amber-100">
+          <span className="font-black">{leaderName}</span> is running the night at {leaderRecord}
+          {" while "}
+          <span className="font-black">{trailerName}</span> sits at {trailerRecord}.
+        </p>
+        <button
+          type="button"
+          aria-label="Dismiss suggestion"
+          onClick={onDismiss}
+          className="shrink-0 -mt-1 -mr-1 w-8 h-8 rounded-lg text-amber-300/70 text-lg font-black"
+        >
+          ×
+        </button>
+      </div>
       <button
         type="button"
         onClick={onRebalance}

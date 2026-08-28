@@ -27,6 +27,7 @@ const validSession = {
   matches: [validMatch],
   finished: false,
   balancingRounds: 0,
+  rebalanceMuted: false,
 };
 
 describe("StoredPlayerSchema", () => {
@@ -94,6 +95,11 @@ describe("SessionSchema", () => {
   test("defaults balancingRounds to 0 for sessions stored before the field existed", () => {
     const { balancingRounds: _dropped, ...legacy } = validSession;
     expect(SessionSchema.parse(legacy).balancingRounds).toBe(0);
+  });
+
+  test("defaults rebalanceMuted to false for sessions stored before the field existed", () => {
+    const { rebalanceMuted: _dropped, ...legacy } = validSession;
+    expect(SessionSchema.parse(legacy).rebalanceMuted).toBe(false);
   });
 
   test("rejects a negative balancing round count", () => {

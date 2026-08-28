@@ -5,7 +5,15 @@ import type { Session } from "../types";
 const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`);
 
 function makeSession(date: string, teams: [string[], string[], string[]]): Session {
-  return { id: `s-${date}`, date, teams, matches: [], finished: true, balancingRounds: 0 };
+  return {
+    id: `s-${date}`,
+    date,
+    teams,
+    matches: [],
+    finished: true,
+    balancingRounds: 0,
+    rebalanceMuted: false,
+  };
 }
 
 const TEAMS: [string[], string[], string[]] = [ids("a", 4), ids("b", 4), ids("c", 4)];

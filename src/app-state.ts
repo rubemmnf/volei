@@ -19,6 +19,7 @@ export type AppAction =
       scoreB: number;
     }
   | { type: "apply-swap"; teamA: number; playerA: string; teamB: number; playerB: string }
+  | { type: "mute-rebalance" }
   | { type: "replace-state"; state: AppState };
 
 export function initialState(): AppState {
@@ -82,6 +83,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         matches: [],
         finished: false,
         balancingRounds: 0,
+        rebalanceMuted: false,
       };
       return { ...state, sessions: [...state.sessions, session] };
     }
@@ -150,6 +152,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         }) as [string[], string[], string[]];
         return { ...s, teams };
       });
+
+    // Deliberately its own action rather than a side effect of "apply-swap": the
+    // swap is a change to the teams, this is the organizer saying they have seen
+    // the suggestion. Dismissing the banner without swapping counts too.
+    case "mute-rebalance":
+      return mapActiveSession(state, (s) => ({ ...s, rebalanceMuted: true }));
 
     case "replace-state":
       return action.state;

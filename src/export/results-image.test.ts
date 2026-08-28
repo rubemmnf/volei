@@ -43,7 +43,15 @@ function match(
 }
 
 function session(matches: Match[], balancingRounds = 0): Session {
-  return { id: "s1", date: "2026-08-10", teams: TEAMS, matches, finished: true, balancingRounds };
+  return {
+    id: "s1",
+    date: "2026-08-10",
+    teams: TEAMS,
+    matches,
+    finished: true,
+    balancingRounds,
+    rebalanceMuted: false,
+  };
 }
 
 /** Team A wins twice, team B once, team C never. */
