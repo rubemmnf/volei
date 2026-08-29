@@ -2,7 +2,13 @@ import { useState } from "react";
 import type { AppState, Match, Player } from "../types";
 import { activeSession, type AppAction } from "../app-state";
 import { buildFamiliarityMatrix } from "../algorithm/familiarity";
-import { formBias, lopsidedPairing, teamForm, type TeamForm } from "../algorithm/session-stats";
+import {
+  formBias,
+  lopsidedPairing,
+  teamForm,
+  teamStandings,
+  type TeamForm,
+} from "../algorithm/session-stats";
 import { rankSwaps, type RankedSwap } from "../algorithm/suggest-swap";
 import { EditScoreModal } from "./EditScoreModal";
 import { MatchList } from "./MatchList";
@@ -91,6 +97,11 @@ export function SessionScreen({ state, players, dispatch }: Props) {
   // Tonight's record is folded in as an Elo-sum bias instead.
   const form = teamForm(session);
 
+  // What the cards show. Deliberately not `form`: the organizer is reading these to
+  // see who is winning the night, and the balancing rounds do not count toward that.
+  const standings = teamStandings(session);
+  const standingsStarted = standings.some((team) => team.wins + team.losses > 0);
+
   const openSwapFor = (ia: number, ib: number) => {
     const matrix = buildFamiliarityMatrix(state.sessions, new Date(), state.settings);
     const suggestions = rankSwaps(
@@ -123,7 +134,10 @@ export function SessionScreen({ state, players, dispatch }: Props) {
         Session · {session.date}
       </h2>
 
-      <p className="text-zinc-500 text-xs">Tap the two teams about to play.</p>
+      <p className="text-zinc-500 text-xs">
+        Tap the two teams about to play.
+        {standingsStarted && " Each card shows tonight's wins–losses and point difference."}
+      </p>
       <div className="flex flex-col gap-3">
         {session.teams.map((teamIds, i) => {
           const meta = TEAM_META[i];
@@ -159,6 +173,7 @@ export function SessionScreen({ state, players, dispatch }: Props) {
                     {order === 0 ? "picked first" : "picked second"}
                   </span>
                 )}
+                {standingsStarted && <StandingChip team={standings[i]} />}
               </span>
               <span className="block text-sm text-zinc-400 mt-1">
                 {resolveTeam(teamIds)
@@ -334,6 +349,41 @@ export function SessionScreen({ state, players, dispatch }: Props) {
 
 function record(form: TeamForm): string {
   return `${form.wins}-${form.losses}`;
+}
+
+/** `+11` / `-4` / `0`. The sign is the point of the number, so it is always shown. */
+function signed(points: number): string {
+  return points > 0 ? `+${points}` : `${points}`;
+}
+
+function netPointsClass(points: number): string {
+  if (points > 0) return "text-emerald-400";
+  if (points < 0) return "text-rose-400";
+  return "text-zinc-500";
+}
+
+/**
+ * Tonight's record on the team card the organizer is already tapping.
+ *
+ * The digits are aria-hidden and restated in words: read out raw, `1-0 +11` lands
+ * in the middle of the button's accessible name as "one minus zero plus eleven".
+ */
+function StandingChip({ team }: { team: TeamForm }) {
+  const wins = `${team.wins} ${team.wins === 1 ? "win" : "wins"}`;
+  const losses = `${team.losses} ${team.losses === 1 ? "loss" : "losses"}`;
+  const diff = `${team.netPoints < 0 ? "minus" : "plus"} ${Math.abs(team.netPoints)} points`;
+
+  return (
+    <span className="ml-auto shrink-0 flex items-baseline gap-2 tabular-nums">
+      <span aria-hidden="true" className="text-sm font-black text-white">
+        {record(team)}
+      </span>
+      <span aria-hidden="true" className={`text-xs font-bold ${netPointsClass(team.netPoints)}`}>
+        {signed(team.netPoints)}
+      </span>
+      <span className="sr-only">{`${wins}, ${losses}, ${diff}`}</span>
+    </span>
+  );
 }
 
 type LopsidedBannerProps = {

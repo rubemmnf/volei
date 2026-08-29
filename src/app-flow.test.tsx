@@ -255,6 +255,93 @@ describe("session flow", () => {
     expect(screen.queryByText(/25\s*[–-]\s*19/)).not.toBeInTheDocument();
   });
 
+  // The standings are what the group argues over between matches, so they belong on
+  // the cards rather than behind the end-of-session screen.
+  test("each team card carries its record and point difference once a match counts", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+
+    // Nothing counted yet — three 0-0 chips would be noise.
+    expect(screen.queryByText("0-0")).not.toBeInTheDocument();
+
+    await selectTeamsAB(user);
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "19");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+
+    const cardA = screen.getByRole("button", { name: /^Time A/ });
+    expect(within(cardA).getByText("1-0")).toBeInTheDocument();
+    expect(within(cardA).getByText("+6")).toBeInTheDocument();
+
+    const cardB = screen.getByRole("button", { name: /^Time B/ });
+    expect(within(cardB).getByText("0-1")).toBeInTheDocument();
+    expect(within(cardB).getByText("-6")).toBeInTheDocument();
+
+    // Team C sat the match out, so it shows level rather than nothing.
+    expect(within(screen.getByRole("button", { name: /^Time C/ })).getByText("0-0"))
+      .toBeInTheDocument();
+  });
+
+  // Balancing rounds decide nothing about the night, so the cards must not count them.
+  test("the cards ignore the balancing rounds", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "19");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+    await user.click(screen.getByRole("button", { name: /more balancing rounds/i }));
+
+    expect(screen.queryByText("1-0")).not.toBeInTheDocument();
+  });
+
+  // The standings are what the group argues over between matches, so they belong on
+  // the cards rather than behind the end-of-session screen.
+  test("each team card carries its record and point difference once a match counts", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Session" }));
+
+    // Nothing counted yet — three 0-0 chips would be noise.
+    expect(screen.queryByText("0-0")).not.toBeInTheDocument();
+
+    await selectTeamsAB(user);
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "19");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+
+    const cardA = screen.getByRole("button", { name: /^Time A/ });
+    expect(within(cardA).getByText("1-0")).toBeInTheDocument();
+    expect(within(cardA).getByText("+6")).toBeInTheDocument();
+
+    const cardB = screen.getByRole("button", { name: /^Time B/ });
+    expect(within(cardB).getByText("0-1")).toBeInTheDocument();
+    expect(within(cardB).getByText("-6")).toBeInTheDocument();
+
+    // Team C sat the match out, so it shows level rather than nothing.
+    expect(
+      within(screen.getByRole("button", { name: /^Time C/ })).getByText("0-0"),
+    ).toBeInTheDocument();
+  });
+
+  // Balancing rounds decide nothing about the night, so the cards must not count them.
+  test("the cards ignore the balancing rounds", async () => {
+    saveState(activeSessionState());
+    const user = userEvent.setup();
+    render(<App />);
+    await selectTeamsAB(user);
+    await user.type(screen.getByLabelText("Score Time A"), "25");
+    await user.type(screen.getByLabelText("Score Time B"), "19");
+    await user.click(screen.getByRole("button", { name: /save match/i }));
+    await user.click(screen.getByRole("button", { name: /more balancing rounds/i }));
+
+    expect(screen.queryByText("1-0")).not.toBeInTheDocument();
+  });
+
   // Every seeded player has the same rating, so the algorithm has nothing to
   // suggest — the group still has to be able to make the trade it wants.
   test("a swap the algorithm never suggested can be made by hand", async () => {
