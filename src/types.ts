@@ -56,7 +56,7 @@ export const SessionSchema = z.object({
 });
 
 export const AppStateSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   players: z.array(StoredPlayerSchema),
   sessions: z.array(SessionSchema),
   /**

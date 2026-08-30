@@ -21,8 +21,8 @@ describe("SettingsSchema", () => {
       eloPerNetPoint: 5,
       dominanceThreshold: 2,
       kFactor: 32,
-      minElo: 800,
-      maxElo: 1600,
+      minElo: 1000,
+      maxElo: 2000,
       maxSkill: 5,
     });
   });

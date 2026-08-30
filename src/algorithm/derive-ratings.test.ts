@@ -24,7 +24,7 @@ function stateWith(matches: Match[], finished = true): AppState {
     balancingRounds: 0,
     rebalanceMuted: false,
   };
-  return { version: 2, players, sessions: [session], settings: DEFAULT_SETTINGS };
+  return { version: 3, players, sessions: [session], settings: DEFAULT_SETTINGS };
 }
 
 const match = (id: string, a: number, b: number, scoreA: number, scoreB: number): Match => ({

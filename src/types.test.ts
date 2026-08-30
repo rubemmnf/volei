@@ -117,18 +117,18 @@ describe("SessionSchema", () => {
 
 describe("AppStateSchema", () => {
   test("accepts a valid app state", () => {
-    const state = { version: 2, players: [validPlayer], sessions: [validSession] };
+    const state = { version: 3, players: [validPlayer], sessions: [validSession] };
     expect(AppStateSchema.parse(state)).toEqual({ ...state, settings: DEFAULT_SETTINGS });
   });
 
   test("defaults settings for states stored before the field existed", () => {
-    const legacy = { version: 2, players: [], sessions: [] };
+    const legacy = { version: 3, players: [], sessions: [] };
     expect(AppStateSchema.parse(legacy).settings).toEqual(DEFAULT_SETTINGS);
   });
 
   test("rejects an out-of-range setting", () => {
     const state = {
-      version: 2,
+      version: 3,
       players: [],
       sessions: [],
       settings: { ...DEFAULT_SETTINGS, sessionPeriodDays: 0 },
@@ -143,6 +143,11 @@ describe("AppStateSchema", () => {
 
   test("rejects the unmigrated v1 shape", () => {
     const state = { version: 1, players: [], sessions: [] };
+    expect(AppStateSchema.safeParse(state).success).toBe(false);
+  });
+
+  test("rejects the unmigrated v2 shape", () => {
+    const state = { version: 2, players: [], sessions: [] };
     expect(AppStateSchema.safeParse(state).success).toBe(false);
   });
 });

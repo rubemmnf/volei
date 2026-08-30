@@ -37,7 +37,7 @@ beforeEach(() => {
 
 function rosterState(count: number): AppState {
   return {
-    version: 2,
+    version: 3,
     settings: DEFAULT_SETTINGS,
     players: Array.from({ length: count }, (_, i) => ({
       id: `p${i + 1}`,
@@ -170,7 +170,7 @@ describe("state replacement resilience", () => {
 
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const replacement = {
-      version: 2,
+      version: 3,
       players: rosterState(12).players.map((p) => ({
         ...p,
         id: `new-${p.id}`,
@@ -748,7 +748,7 @@ const ELO_BY_NAME = new Map(VARIED_ELOS.map((elo, i) => [`V${i + 1}`, elo]));
 
 function variedRosterState(): AppState {
   return {
-    version: 2,
+    version: 3,
     settings: DEFAULT_SETTINGS,
     players: VARIED_ELOS.map((elo, i) => ({
       id: `v${i + 1}`,

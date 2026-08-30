@@ -25,7 +25,7 @@ export type AppAction =
   | { type: "replace-state"; state: AppState };
 
 export function initialState(): AppState {
-  return { version: 2, players: [], sessions: [], settings: DEFAULT_SETTINGS };
+  return { version: 3, players: [], sessions: [], settings: DEFAULT_SETTINGS };
 }
 
 export function activeSession(state: AppState) {

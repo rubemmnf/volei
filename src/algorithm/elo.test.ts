@@ -14,21 +14,21 @@ function makeTeam(elos: number[]): Player[] {
 }
 
 describe("skillToElo", () => {
-  test("maps skill 1 to 800", () => {
-    expect(skillToElo(1)).toBe(800);
+  test("maps skill 1 to 1000", () => {
+    expect(skillToElo(1)).toBe(1000);
   });
 
-  test("maps skill 5 to 1600", () => {
-    expect(skillToElo(5)).toBe(1600);
+  test("maps skill 5 to 2000", () => {
+    expect(skillToElo(5)).toBe(2000);
   });
 
-  test("maps skill 3 to 1200", () => {
-    expect(skillToElo(3)).toBe(1200);
+  test("maps skill 3 to 1500", () => {
+    expect(skillToElo(3)).toBe(1500);
   });
 
   test("clamps out-of-range skill", () => {
-    expect(skillToElo(0)).toBe(800);
-    expect(skillToElo(6)).toBe(1600);
+    expect(skillToElo(0)).toBe(1000);
+    expect(skillToElo(6)).toBe(2000);
   });
 });
 

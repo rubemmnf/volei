@@ -42,7 +42,7 @@ describe("add-player", () => {
   test("adds a player with baseElo seeded from skill", () => {
     const state = addPlayer(initialState(), "p1", 5);
     expect(state.players).toHaveLength(1);
-    expect(state.players[0].baseElo).toBe(1600);
+    expect(state.players[0].baseElo).toBe(2000);
     expect(state.players[0].active).toBe(true);
   });
 });
@@ -52,7 +52,7 @@ describe("update-player", () => {
     let state = addPlayer(initialState(), "p1", 5);
     state = appReducer(state, { type: "update-player", id: "p1", name: "New", skill: 5 });
     expect(state.players[0].name).toBe("New");
-    expect(state.players[0].baseElo).toBe(1600);
+    expect(state.players[0].baseElo).toBe(2000);
   });
 
   test("keeps the frozen seed when player has session history", () => {

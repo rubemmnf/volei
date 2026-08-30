@@ -40,9 +40,9 @@ export const SettingsSchema = z.object({
   /** Elo volatility. Changing it re-rates every past match. */
   kFactor: z.number().min(1).max(200).default(32),
   /** Bottom of the skill-to-Elo seed range. Changing it re-rates every past match. */
-  minElo: z.number().int().min(0).max(5000).default(800),
+  minElo: z.number().int().min(0).max(5000).default(1000),
   /** Top of the skill-to-Elo seed range. Changing it re-rates every past match. */
-  maxElo: z.number().int().min(0).max(5000).default(1600),
+  maxElo: z.number().int().min(0).max(5000).default(2000),
   /** Top of the skill scale the roster form offers. */
   maxSkill: z.number().int().min(2).max(MAX_SKILL_CEILING).default(5),
 });

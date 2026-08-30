@@ -7,7 +7,7 @@ import { computeEloDeltas, skillToElo } from "./algorithm/elo";
 import { deriveRatings } from "./algorithm/derive-ratings";
 
 const sampleState: AppState = {
-  version: 2,
+  version: 3,
   settings: DEFAULT_SETTINGS,
   players: [{ id: "p1", name: "John", skill: 4, baseElo: 1200, active: true }],
   sessions: [],
@@ -49,15 +49,17 @@ describe("export/import", () => {
   });
 
   test("import throws on schema violation", () => {
-    expect(() => importState(JSON.stringify({ version: 2, players: "x", sessions: [] }))).toThrow();
+    expect(() => importState(JSON.stringify({ version: 3, players: "x", sessions: [] }))).toThrow();
   });
 });
 
 describe("v1 -> v2 migration", () => {
   test("backs baseElo out of the running total using the stored deltas", () => {
     const migrated = migrate(v1Fixture()) as AppState;
-    expect(migrated.version).toBe(2);
+    expect(migrated.version).toBe(3);
     for (const player of migrated.players) {
+      // Two steps land exactly on today's seed: v2 recovers the old-range seed by
+      // undoing the deltas, v3 maps that range onto the current one.
       expect(player.baseElo).toBe(skillToElo(player.skill));
       expect(player).not.toHaveProperty("elo");
     }
@@ -71,14 +73,21 @@ describe("v1 -> v2 migration", () => {
     }
   });
 
-  test("replayed ratings equal the v1 running totals", () => {
+  test("replay preserves the order the v1 running totals put players in", () => {
+    // Not equality any more: v3 stretches every seed gap by 1.25, so replaying the
+    // same scores over the wider range yields different deltas. What has to survive
+    // is who ended up above whom.
     const v1 = v1Fixture();
     const migrated = AppStateSchema.parse(migrate(v1));
     const derived = deriveRatings(migrated);
 
-    for (const old of v1.players) {
-      expect(derived.find((p) => p.id === old.id)!.elo).toBe(old.elo);
-    }
+    const byId = new Map(derived.map((p) => [p.id, p.elo]));
+    const oldOrder = [...v1.players].sort((a, b) => a.elo - b.elo || a.id.localeCompare(b.id));
+    const newOrder = [...v1.players].sort(
+      (a, b) => byId.get(a.id)! - byId.get(b.id)! || a.id.localeCompare(b.id),
+    );
+
+    expect(newOrder.map((p) => p.id)).toEqual(oldOrder.map((p) => p.id));
   });
 
   test("loads a v1 blob straight out of localStorage", () => {
@@ -88,10 +97,10 @@ describe("v1 -> v2 migration", () => {
   });
 
   test("imports a v1 export", () => {
-    expect(importState(JSON.stringify(v1Fixture())).version).toBe(2);
+    expect(importState(JSON.stringify(v1Fixture())).version).toBe(3);
   });
 
-  test("leaves an already-migrated v2 state untouched", () => {
+  test("leaves an already-migrated current state untouched", () => {
     expect(migrate(sampleState)).toEqual(sampleState);
   });
 });
@@ -101,10 +110,14 @@ describe("v1 -> v2 migration", () => {
  * running elo at record time and accumulated onto `Player.elo`. Fabricated deltas
  * would not survive a replay, so they are computed here rather than hardcoded.
  */
+/** The seed range in force when v1 blobs were written. */
+const V1_SEEDS = { minElo: 800, maxElo: 1600, maxSkill: 5 };
+
 function v1Fixture() {
   const players = Array.from({ length: 12 }, (_, i) => {
     const skill = (i % 5) + 1;
-    return { id: `p${i + 1}`, name: `Player ${i + 1}`, skill, elo: skillToElo(skill), active: true };
+    const elo = skillToElo(skill, V1_SEEDS);
+    return { id: `p${i + 1}`, name: `Player ${i + 1}`, skill, elo, active: true };
   });
 
   const teams = [
@@ -173,11 +186,75 @@ describe("settings persistence", () => {
 
   test("a backup carrying an out-of-range setting is rejected", () => {
     const text = JSON.stringify({
-      version: 2,
+      version: 3,
       players: [],
       sessions: [],
       settings: { ...DEFAULT_SETTINGS, familiarityDecay: 42 },
     });
     expect(() => importState(text)).toThrow();
+  });
+});
+
+describe("v2 -> v3 seed range", () => {
+  const v2 = (players: unknown[], settings?: Record<string, unknown>) => ({
+    version: 2,
+    players,
+    sessions: [],
+    ...(settings ? { settings } : {}),
+  });
+
+  const player = (id: string, baseElo: number) => ({
+    id,
+    name: id,
+    skill: 3,
+    baseElo,
+    active: true,
+  });
+
+  test("remaps the ends of the old range onto the ends of the new one", () => {
+    const migrated = migrate(v2([player("lo", 800), player("hi", 1600)])) as AppState;
+    expect(migrated.players.map((p) => p.baseElo)).toEqual([1000, 2000]);
+  });
+
+  test("keeps the midpoint at the midpoint", () => {
+    const migrated = migrate(v2([player("mid", 1200)])) as AppState;
+    expect(migrated.players[0].baseElo).toBe(1500);
+  });
+
+  test("preserves the order and relative spacing of the roster", () => {
+    const before = [900, 1000, 1400];
+    const migrated = migrate(v2(before.map((e, i) => player(`p${i}`, e)))) as AppState;
+    const after = migrated.players.map((p) => p.baseElo);
+
+    expect(after).toEqual([...after].sort((a, b) => a - b));
+    // Every gap stretches by the same factor, so nobody overtakes anybody.
+    const ratio = (after[1] - after[0]) / (before[1] - before[0]);
+    expect((after[2] - after[1]) / (before[2] - before[1])).toBeCloseTo(ratio);
+  });
+
+  test("moves the stored seed range across with the players", () => {
+    const migrated = migrate(v2([player("p1", 1200)])) as AppState;
+    expect(migrated.settings.minElo).toBe(1000);
+    expect(migrated.settings.maxElo).toBe(2000);
+  });
+
+  test("leaves a customised seed range and its players alone", () => {
+    const custom = { ...DEFAULT_SETTINGS, minElo: 500, maxElo: 3000 };
+    const migrated = migrate(v2([player("p1", 1200)], custom)) as AppState;
+
+    expect(migrated.players[0].baseElo).toBe(1200);
+    expect(migrated.settings.minElo).toBe(500);
+    expect(migrated.settings.maxElo).toBe(3000);
+  });
+
+  test("a v1 backup runs through both migrations and parses", () => {
+    const migrated = AppStateSchema.parse(migrate(v1Fixture()));
+    expect(migrated.version).toBe(3);
+    expect(migrated.settings.minElo).toBe(1000);
+  });
+
+  test("a new player seeds on the new range", () => {
+    expect(skillToElo(1)).toBe(1000);
+    expect(skillToElo(5)).toBe(2000);
   });
 });
