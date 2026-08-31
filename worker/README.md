@@ -49,6 +49,28 @@ Then run the app against it:
 VITE_SYNC_URL=ws://127.0.0.1:8787 npm run dev
 ```
 
+## Tests
+
+The app's own `npm test` covers the client half — rebase convergence, the wire
+schemas, the offline queue. This covers the half that only exists here: seq
+ordering, fan-out, `localId` dedupe, catch-up, and refusing to store a malformed
+action. It drives real sockets, so it needs a server running.
+
+Against a local `npm run dev`:
+
+```bash
+npm run test:integration
+```
+
+Against the deployed Worker:
+
+```bash
+SYNC_URL=wss://volei-sync.<subdomain>.workers.dev npm run test:integration
+```
+
+Each run uses a fresh random room, so runs never inherit each other's log and it
+is safe to point at production.
+
 ## Protocol
 
 Client → server:
