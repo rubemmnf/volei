@@ -10,7 +10,12 @@ export type AppAction =
   | { type: "start-session"; id: string; date: string; teams: [string[], string[], string[]] }
   | { type: "end-session" }
   | { type: "record-match"; match: Match }
-  | { type: "undo-last-match" }
+  /**
+   * `matchId` names the match the tap meant to remove. Optional so a plain undo
+   * still means "the last one", but the shared-session client always sends it:
+   * two phones undoing at once would otherwise delete two different matches.
+   */
+  | { type: "undo-last-match"; matchId?: string }
   | { type: "set-balancing-rounds"; count: number }
   | {
       type: "edit-match-score";
@@ -80,6 +85,9 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, players: state.players.filter((p) => p.id !== action.id) };
 
     case "start-session": {
+      // Two phones tapping "start" at once would append two unfinished sessions,
+      // and `activeSession` would silently pick whichever landed first.
+      if (activeSession(state)) return state;
       const session = {
         id: action.id,
         date: action.date,
@@ -103,6 +111,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "undo-last-match": {
       const session = activeSession(state);
       if (!session || session.matches.length === 0) return state;
+      const last = session.matches[session.matches.length - 1];
+      if (action.matchId !== undefined && action.matchId !== last.id) return state;
       return mapActiveSession(state, (s) => ({ ...s, matches: s.matches.slice(0, -1) }));
     }
 

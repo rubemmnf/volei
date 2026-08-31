@@ -102,6 +102,29 @@ describe("session lifecycle", () => {
     const state = appReducer(stateWithActiveSession(), { type: "end-session" });
     expect(state.sessions[0].finished).toBe(true);
   });
+
+  test("start-session is a no-op while a session is already live", () => {
+    const before = stateWithActiveSession();
+    const after = appReducer(before, {
+      type: "start-session",
+      id: "s2",
+      date: "2026-07-17",
+      teams: TEAMS,
+    });
+    expect(after).toEqual(before);
+  });
+
+  test("start-session works again once the previous session finished", () => {
+    const finished = appReducer(stateWithActiveSession(), { type: "end-session" });
+    const after = appReducer(finished, {
+      type: "start-session",
+      id: "s2",
+      date: "2026-07-17",
+      teams: TEAMS,
+    });
+    expect(after.sessions).toHaveLength(2);
+    expect(after.sessions[1].id).toBe("s2");
+  });
 });
 
 describe("record-match", () => {
@@ -129,6 +152,21 @@ describe("undo-last-match", () => {
   test("is a no-op when the active session has no matches", () => {
     const state = stateWithActiveSession();
     expect(appReducer(state, { type: "undo-last-match" })).toEqual(state);
+  });
+
+  test("removes the named match when it is still the last one", () => {
+    const before = stateWithActiveSession();
+    let state = appReducer(before, { type: "record-match", match });
+    state = appReducer(state, { type: "undo-last-match", matchId: "m1" });
+    expect(state).toEqual(before);
+  });
+
+  // Two phones undoing at once would otherwise delete two matches: the second
+  // undo arrives naming a match that the first one already removed.
+  test("is a no-op when the named match is no longer the last one", () => {
+    let state = appReducer(stateWithActiveSession(), { type: "record-match", match });
+    state = appReducer(state, { type: "record-match", match: { ...match, id: "m2" } });
+    expect(appReducer(state, { type: "undo-last-match", matchId: "m1" })).toEqual(state);
   });
 });
 

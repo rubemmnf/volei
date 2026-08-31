@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "volei-sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOM", "class_name": "Room" }]
+  },
+  // SQLite-backed Durable Objects are the ones available on the Workers free
+  // plan, so the class must be registered with `new_sqlite_classes`.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
+}

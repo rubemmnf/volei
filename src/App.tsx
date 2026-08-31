@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
-import { activeSession, appReducer, initialState, type AppAction } from "./app-state";
+import { useEffect, useMemo, useState } from "react";
+import { activeSession, initialState, type AppAction } from "./app-state";
 import { deriveRatings } from "./algorithm/derive-ratings";
 import { importState, loadState, saveState } from "./storage";
 import type { AppState } from "./types";
@@ -8,6 +8,8 @@ import { TeamsScreen } from "./components/TeamsScreen";
 import { SessionScreen } from "./components/SessionScreen";
 import { HistoryScreen } from "./components/HistoryScreen";
 import { SettingsModal } from "./components/SettingsModal";
+import { SyncModal } from "./components/SyncModal";
+import { useSync, type SyncState } from "./sync/use-sync";
 
 type Tab = "players" | "teams" | "session" | "history";
 
@@ -21,13 +23,15 @@ const TABS: { id: Tab; label: string }[] = [
 export default function App() {
   const [loaded] = useState(loadState);
   const [blocked, setBlocked] = useState(loaded.status === "corrupt");
-  const [state, dispatch] = useReducer(appReducer, undefined, () =>
-    loaded.status === "ok" ? loaded.state : initialState(),
-  );
+  const sync = useSync(loaded.status === "ok" ? loaded.state : initialState());
+  const { state, dispatch } = sync;
   const [tab, setTab] = useState<Tab>(() =>
     loaded.status === "ok" && activeSession(loaded.state) ? "session" : "players",
   );
   const [showSettings, setShowSettings] = useState(false);
+  // A shared link lands on the app with `#room=…`; open the modal so the join is
+  // an explicit choice rather than something that silently replaces their data.
+  const [showSync, setShowSync] = useState(() => window.location.hash.includes("room="));
 
   // Ratings are replayed from match history, not stored, so correcting a score
   // anywhere in the past re-rates everything after it.
@@ -55,14 +59,17 @@ export default function App() {
         <h1 className="text-2xl font-black tracking-tighter text-white">
           VOLEI<span className="text-emerald-400">.</span>
         </h1>
-        <button
-          type="button"
-          aria-label="Settings"
-          onClick={() => setShowSettings(true)}
-          className="text-zinc-400 border border-zinc-800 rounded-xl px-3 py-2 font-bold"
-        >
-          ⛭
-        </button>
+        <div className="flex items-center gap-2">
+          <SyncButton status={sync.status} onClick={() => setShowSync(true)} />
+          <button
+            type="button"
+            aria-label="Settings"
+            onClick={() => setShowSettings(true)}
+            className="text-zinc-400 border border-zinc-800 rounded-xl px-3 py-2 font-bold"
+          >
+            ⛭
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 p-4 pb-24">
@@ -103,7 +110,34 @@ export default function App() {
       {showSettings && (
         <SettingsModal state={state} dispatch={dispatch} onClose={() => setShowSettings(false)} />
       )}
+
+      {showSync && <SyncModal state={state} sync={sync} onClose={() => setShowSync(false)} />}
     </div>
+  );
+}
+
+const SYNC_DOT: Record<SyncState["status"], string> = {
+  standalone: "bg-zinc-600",
+  offline: "bg-amber-400",
+  connecting: "bg-zinc-400 animate-pulse",
+  online: "bg-emerald-400",
+};
+
+/**
+ * Lives in the header rather than on the session screen so the answer to "did
+ * that score actually leave my phone?" is visible from every tab.
+ */
+function SyncButton({ status, onClick }: { status: SyncState["status"]; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Shared session: ${status}`}
+      onClick={onClick}
+      className="flex items-center gap-2 text-zinc-400 border border-zinc-800 rounded-xl px-3 py-2 font-bold"
+    >
+      <span className={`w-2 h-2 rounded-full ${SYNC_DOT[status]}`} />
+      <span className="text-sm">Share</span>
+    </button>
   );
 }
 

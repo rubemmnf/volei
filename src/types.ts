@@ -20,7 +20,7 @@ export const StoredPlayerSchema = z.object({
   active: z.boolean(),
 });
 
-const SideSchema = z.array(z.string()).length(4);
+export const SideSchema = z.array(z.string()).length(4);
 
 export const MatchSchema = z
   .object({

@@ -275,7 +275,12 @@ export function SessionScreen({ state, players, dispatch }: Props) {
       {session.matches.length > 0 && (
         <button
           type="button"
-          onClick={() => dispatch({ type: "undo-last-match" })}
+          onClick={() =>
+            dispatch({
+              type: "undo-last-match",
+              matchId: session.matches[session.matches.length - 1].id,
+            })
+          }
           className="w-full border border-zinc-700 text-zinc-300 font-bold py-3 rounded-xl"
         >
           Undo Last Match
